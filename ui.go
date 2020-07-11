@@ -1,6 +1,7 @@
 package main
 
 import (
+	"fmt"
 	"unicode/utf8"
 
 	"github.com/mattn/go-runewidth"
@@ -42,7 +43,7 @@ type Ui struct {
 	titleWin *Win
 	// marketWin *Win
 	labelWin *Win
-	// stockWin  *Win
+	stockWin *Win
 }
 
 func newUI() *Ui {
@@ -79,16 +80,23 @@ func newUI() *Ui {
 			x: 0,
 			y: 1,
 		},
+		stockWin: &Win{
+			w: wtot,
+			h: 1,
+			x: 0,
+			y: 2,
+		},
 	}
 
 }
 
-func (ui *Ui) draw() {
+func (ui *Ui) draw(quotes *[]Quote) {
 	fg, bg := termbox.ColorDefault, termbox.ColorDefault
 
 	termbox.Clear(fg, bg)
 	ui.drawTitleLine()
 	ui.drawLabelWin()
+	ui.drawStockWin(quotes)
 
 	// w, h := termbox.Size()
 	// fmt.Printf("termbox size: %d, %d", w, h)
@@ -111,4 +119,14 @@ func (ui *Ui) drawLabelWin() {
 	labels := "Ticker | Last | Change | Josh"
 
 	ui.labelWin.print(0, 0, fg, bg, labels)
+}
+
+func (ui *Ui) drawStockWin(quotes *[]Quote) {
+	fg, bg := termbox.ColorDefault, termbox.ColorDefault
+
+	// TODO: don't do this. use a struct with properties, or some constants.
+	for id, q := range *quotes {
+		tickerLine := q.Ticker + "|" + fmt.Sprintf("%.2f", q.LastTrade) + "|" + fmt.Sprintf("%.2f", q.Change)
+		ui.stockWin.print(0, id, fg, bg, tickerLine)
+	}
 }
