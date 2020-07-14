@@ -18,11 +18,13 @@ import (
 const defaultProfile = ".config/monmop/monmoprc"
 
 type app struct {
-	ui       *Ui
-	ticker   *time.Ticker
-	quitChan chan bool
-	keyQueue chan termbox.Event
-	profile  *profile
+	ui           *Ui
+	ticker       *time.Ticker
+	quitChan     chan bool
+	keyQueue     chan termbox.Event
+	profile      *profile
+	stockQuotes  *[]Quote
+	marketQuotes *[]Quote
 }
 
 type profile struct {
@@ -93,27 +95,31 @@ func newApp() *app {
 	return &app{
 		ui:       ui,
 		quitChan: quitChan,
-		ticker:   time.NewTicker(1 * time.Second),
+		ticker:   time.NewTicker(60 * time.Second),
 		keyQueue: keyQueue,
 		profile:  profile,
 	}
 
 }
 
-func (app *app) GetQuotes() *[]Quote {
-	quotes, err := FetchAll(app.profile.Tickers)
+func (app *app) GetQuotes() (*[]Quote, *[]Quote) {
+	stockQuotes, err := FetchAll(app.profile.Tickers)
+	if err != nil {
+		panic(err)
+	}
+
+	marketQuotes, err := FetchMarket()
 
 	if err != nil {
 		panic(err)
 	}
 
-	return &quotes
+	return &marketQuotes, &stockQuotes
 }
 
 // main app loop
 func (app *app) loop() {
-	quotes := app.GetQuotes()
-	app.ui.draw(quotes)
+	app.fetchAndDraw()
 	for {
 		select {
 		case <-app.quitChan:
@@ -126,11 +132,31 @@ func (app *app) loop() {
 				if event.Ch == 'q' || event.Ch == 'Q' {
 					fmt.Printf("See ya!")
 					return
+				} else if event.Ch == 'j' {
+					if app.ui.selectedQuote < len(*app.stockQuotes)-1 {
+						app.ui.selectedQuote += 1 // make this a method?
+					}
+					app.ui.draw(app.marketQuotes, app.stockQuotes)
+				} else if event.Ch == 'k' {
+					if app.ui.selectedQuote > 0 {
+						app.ui.selectedQuote -= 1 // make this a method?
+					}
+					app.ui.draw(app.marketQuotes, app.stockQuotes)
+				} else if event.Ch == 'r' {
+					// r for  "refresh"
+					app.fetchAndDraw()
+				} else if event.Ch == 'a' {
+					// a for "add"
+
 				}
 			}
 		case <-app.ticker.C:
-			quotes := app.GetQuotes()
-			app.ui.draw(quotes)
+			app.fetchAndDraw()
 		}
 	}
+}
+
+func (app *app) fetchAndDraw() {
+	app.marketQuotes, app.stockQuotes = app.GetQuotes()
+	app.ui.draw(app.marketQuotes, app.stockQuotes)
 }
