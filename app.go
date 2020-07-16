@@ -17,14 +17,19 @@ import (
 // TODO: make this more system-wide compatible
 const defaultProfile = ".config/monmop/monmoprc"
 
+type mode int
+
+const (
+	NORMAL mode = iota
+	COMMAND
+)
+
 type app struct {
-	ui           *Ui
-	ticker       *time.Ticker
-	quitChan     chan bool
-	keyQueue     chan termbox.Event
-	profile      *profile
-	stockQuotes  *[]Quote
-	marketQuotes *[]Quote
+	ui       *Ui
+	ticker   *time.Ticker
+	quitChan chan bool
+	keyQueue chan termbox.Event
+	profile  *profile
 }
 
 type profile struct {
@@ -62,8 +67,6 @@ func loadProfile(user *user.User) (*profile, error) {
 }
 
 func newApp() *app {
-	ui := newUI()
-
 	user, err := user.Current()
 	if err != nil {
 		panic(err)
@@ -73,6 +76,8 @@ func newApp() *app {
 	if err != nil {
 		panic(err)
 	}
+
+	ui := newUI(profile)
 
 	quitChan := make(chan bool, 1)
 	osChan := make(chan os.Signal, 1)
@@ -102,21 +107,6 @@ func newApp() *app {
 
 }
 
-func (app *app) GetQuotes() (*[]Quote, *[]Quote) {
-	stockQuotes, err := FetchAll(app.profile.Tickers)
-	if err != nil {
-		panic(err)
-	}
-
-	marketQuotes, err := FetchMarket()
-
-	if err != nil {
-		panic(err)
-	}
-
-	return &marketQuotes, &stockQuotes
-}
-
 // main app loop
 func (app *app) loop() {
 	app.fetchAndDraw()
@@ -133,15 +123,11 @@ func (app *app) loop() {
 					fmt.Printf("See ya!")
 					return
 				} else if event.Ch == 'j' {
-					if app.ui.selectedQuote < len(*app.stockQuotes)-1 {
-						app.ui.selectedQuote += 1 // make this a method?
-					}
-					app.ui.draw(app.marketQuotes, app.stockQuotes)
+					app.ui.navigateStockDown()
+					app.ui.draw()
 				} else if event.Ch == 'k' {
-					if app.ui.selectedQuote > 0 {
-						app.ui.selectedQuote -= 1 // make this a method?
-					}
-					app.ui.draw(app.marketQuotes, app.stockQuotes)
+					app.ui.navigateStockUp()
+					app.ui.draw()
 				} else if event.Ch == 'r' {
 					// r for  "refresh"
 					app.fetchAndDraw()
@@ -157,6 +143,6 @@ func (app *app) loop() {
 }
 
 func (app *app) fetchAndDraw() {
-	app.marketQuotes, app.stockQuotes = app.GetQuotes()
-	app.ui.draw(app.marketQuotes, app.stockQuotes)
+	app.ui.GetQuotes()
+	app.ui.draw()
 }

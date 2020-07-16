@@ -3,6 +3,7 @@ package main
 import (
 	"fmt"
 	"reflect"
+	"time"
 	"unicode/utf8"
 
 	"github.com/mattn/go-runewidth"
@@ -57,17 +58,25 @@ func (win *Win) print(x, y int, fg, bg termbox.Attribute, s string) (termbox.Att
 
 // thin wrapper around TermBox to provide basic UI for monmop
 type Ui struct {
-	titleWin      *Win
-	marketWin     *Win
-	labelWin      *Win
-	stockWin      *Win
-	layout        *Layout
-	selectedQuote int
-	selectedSort  int
+	titleWin             *Win
+	marketWin            *Win
+	labelWin             *Win
+	stockWin             *Win
+	commandWin           *Win
+	layout               *Layout
+	selectedQuote        int
+	zerothQuote          int
+	selectedVisibleQuote int
+	selectedSort         int
+	stockQuotes          []Quote
+	visibleQuotes        []Quote
+	marketQuotes         []Quote
+	maxQuotesHeight      int
+	profile              *profile
 }
 
-func newUI() *Ui {
-	wtot, _ := termbox.Size()
+func newUI(profile *profile) *Ui {
+	wtot, htot := termbox.Size()
 
 	eventQ := make(chan termbox.Event)
 	go func() {
@@ -108,36 +117,50 @@ func newUI() *Ui {
 		},
 		stockWin: &Win{
 			w: wtot,
-			h: 1,
+			h: htot - 7, //terrible practice, but idc
 			x: 0,
 			y: 6,
 		},
-		layout:        NewLayout(),
-		selectedQuote: 0,
-		selectedSort:  0,
+		commandWin: &Win{
+			w: wtot,
+			h: 1,
+			x: 0,
+			y: htot - 1,
+		},
+		layout:          NewLayout(),
+		selectedQuote:   0,
+		selectedSort:    0,
+		zerothQuote:     0,
+		profile:         profile,
+		maxQuotesHeight: htot - 6,
 	}
 
 }
 
-func (ui *Ui) draw(marketQuotes *[]Quote, stockQuotes *[]Quote) {
+func (ui *Ui) draw() {
 	fg, bg := termbox.ColorDefault, termbox.ColorDefault
 
 	termbox.Clear(fg, bg)
 	ui.drawTitleLine()
-	ui.drawMarketWin(marketQuotes)
+	ui.drawMarketWin()
 	ui.drawLabelWin()
-	ui.drawStockWin(stockQuotes)
+	ui.drawStockWin()
+	ui.drawCommandWin(":add")
 
-	// w, h := termbox.Size()
-	// fmt.Printf("termbox size: %d, %d", w, h)
 	termbox.Flush()
 }
 
 // Temp for playing aroudn with termbox
 func (ui *Ui) drawTitleLine() {
-	fg, bg := termbox.ColorDefault|termbox.AttrBold|termbox.AttrUnderline, termbox.ColorDefault
+	fg, bg := termbox.ColorDefault|termbox.AttrBold, termbox.ColorDefault
 
-	title := "Monmop by Monta"
+	currentTime := time.Now()
+
+	titleString := "Monmop by Monta"
+	timeString := currentTime.Format(time.UnixDate)
+
+	// %v and -%v for right and left justification respectively
+	title := fmt.Sprintf("%-*v%*v", ui.titleWin.w/2, titleString, ui.titleWin.w/2, timeString)
 
 	ui.titleWin.print(0, 0, fg, bg, title)
 }
@@ -153,12 +176,12 @@ func (ui *Ui) drawLabelWin() {
 	ui.labelWin.print(0, 0, fg, bg, labels)
 }
 
-func (ui *Ui) drawMarketWin(quotes *[]Quote) {
+func (ui *Ui) drawMarketWin() {
 	fg, bg := termbox.ColorDefault, termbox.ColorDefault
 
 	x := 0
 	y := 0
-	for _, q := range *quotes {
+	for _, q := range ui.marketQuotes {
 		humanFormatted := float2Str(q.LastTrade, 2)
 		tickerLine := fmt.Sprintf("%s ", marketNames[q.Ticker], humanFormatted, q.ChangePct)
 		if x+len(tickerLine) > ui.marketWin.w {
@@ -175,24 +198,26 @@ func (ui *Ui) drawMarketWin(quotes *[]Quote) {
 	}
 }
 
-func (ui *Ui) drawStockWin(quotes *[]Quote) {
+func (ui *Ui) drawStockWin() {
 	_, bg := termbox.ColorDefault, termbox.ColorDefault
 
 	// TODO: don't do this. use a struct with properties, or some constants.
-	for id, q := range *quotes {
+	for id, q := range ui.visibleQuotes {
 		tickerLine := ""
 		highlightColor := bg
-		if ui.selectedQuote == id {
-			highlightColor = termbox.ColorWhite
-		}
 
 		var lineColor termbox.Attribute
 		if q.Change > 0 {
 			lineColor = termbox.ColorGreen
 		} else if q.Change == 0 {
-			lineColor = termbox.ColorWhite
+			lineColor = termbox.ColorBlue
 		} else {
 			lineColor = termbox.ColorRed
+		}
+
+		if ui.selectedVisibleQuote == id {
+			highlightColor = termbox.ColorWhite
+			lineColor = termbox.ColorBlack
 		}
 
 		v := reflect.ValueOf(q)
@@ -212,14 +237,58 @@ func (ui *Ui) drawStockWin(quotes *[]Quote) {
 	}
 }
 
-func (ui *Ui) navigateStock(jump int) {
-	//TODO: think aobut how to write this properly
+func (ui *Ui) drawCommandWin(cmd string) {
+	fg, bg := termbox.ColorDefault, termbox.ColorDefault
 
-	// // navigate up or down a line in the stock window
-	// if jump > 0 && ui.selectedQuote < len(*stockWin.height)-jump {
-	// 	ui.selectedQuote += jump // make this a method?
-	// } else if jump < 0 && (ui.selectedQuote+jump) >= 0 {
-	// 	ui.selectedQuote += jump // make this a method?
-	// }
+	// TODO:
+	ui.commandWin.print(0, 0, fg, bg, fmt.Sprintf("%s ", cmd))
+}
 
+func (ui *Ui) GetQuotes() {
+	var err error
+	ui.stockQuotes, err = FetchQuotes(ui.profile.Tickers)
+	if err != nil {
+		panic(err)
+	}
+
+	ui.marketQuotes, err = FetchMarket()
+
+	if err != nil {
+		panic(err)
+	}
+	// update stock window size to make life easier for us
+	// bad practice? idc
+	if len(ui.stockQuotes) > ui.maxQuotesHeight {
+		ui.stockWin.h = ui.maxQuotesHeight
+		ui.visibleQuotes = ui.stockQuotes[:ui.maxQuotesHeight]
+	} else {
+		ui.stockWin.h = len(ui.stockQuotes)
+		ui.visibleQuotes = ui.stockQuotes
+	}
+}
+
+func (ui *Ui) navigateStockDown() {
+	// navigate down a line in the stock window
+	updatedPos := ui.selectedQuote + 1
+	if updatedPos < ui.stockWin.h {
+		ui.selectedQuote = updatedPos
+		ui.selectedVisibleQuote += 1
+	} else if updatedPos >= ui.stockWin.h && updatedPos < len(ui.stockQuotes) {
+		ui.zerothQuote += 1
+		ui.visibleQuotes = ui.stockQuotes[updatedPos-ui.stockWin.h+1:]
+		ui.selectedQuote = updatedPos
+	}
+}
+
+func (ui *Ui) navigateStockUp() {
+	// navigate up a line in the stock window
+	updatedPos := ui.selectedQuote - 1
+	if updatedPos >= ui.zerothQuote {
+		ui.selectedQuote = updatedPos
+		ui.selectedVisibleQuote -= 1
+	} else if updatedPos < ui.zerothQuote && ui.zerothQuote > 0 {
+		ui.zerothQuote -= 1
+		ui.selectedQuote = updatedPos
+		ui.visibleQuotes = ui.stockQuotes[ui.zerothQuote : ui.zerothQuote+ui.stockWin.h]
+	}
 }

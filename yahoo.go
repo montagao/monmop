@@ -55,11 +55,11 @@ type Quote struct {
 }
 
 func FetchMarket() ([]Quote, error) {
-	return FetchAll(marketTickers)
+	return FetchQuotes(marketTickers)
 }
 
 // retrieve quotes for all tickers
-func FetchAll(tickers []string) ([]Quote, error) {
+func FetchQuotes(tickers []string) ([]Quote, error) {
 	result := []Quote{}
 	url := fmt.Sprintf(apiURLv7, strings.Join(tickers, `,`))
 
