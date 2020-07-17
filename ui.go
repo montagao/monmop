@@ -3,6 +3,7 @@ package main
 import (
 	"fmt"
 	"reflect"
+	"strings"
 	"time"
 	"unicode/utf8"
 
@@ -56,6 +57,15 @@ func (win *Win) print(x, y int, fg, bg termbox.Attribute, s string) (termbox.Att
 
 }
 
+func (win *Win) Clear() {
+	fg, bg := termbox.ColorDefault, termbox.ColorDefault
+	for j := 0; j < win.h; j++ {
+		for i := 0; i < win.w; i++ {
+			termbox.SetCell(win.x+i, win.y+j, ' ', fg, bg)
+		}
+	}
+}
+
 // thin wrapper around TermBox to provide basic UI for monmop
 type Ui struct {
 	titleWin             *Win
@@ -68,11 +78,12 @@ type Ui struct {
 	zerothQuote          int
 	selectedVisibleQuote int
 	selectedSort         int
-	stockQuotes          []Quote
+	stockQuotes          *[]Quote
 	visibleQuotes        []Quote
-	marketQuotes         []Quote
+	marketQuotes         *[]Quote
 	maxQuotesHeight      int
 	profile              *profile
+	lineEditor           *LineEditor
 }
 
 func newUI(profile *profile) *Ui {
@@ -133,11 +144,33 @@ func newUI(profile *profile) *Ui {
 		zerothQuote:     0,
 		profile:         profile,
 		maxQuotesHeight: htot - 6,
+		lineEditor: NewLineEditor(
+			profile,
+			nil,
+			&Win{
+				w: wtot,
+				h: 1,
+				x: 0,
+				y: htot - 1,
+			},
+		),
 	}
 
 }
 
-func (ui *Ui) draw() {
+func (ui *Ui) Resize() {
+	wtot, htot := termbox.Size()
+	ui.titleWin.w = wtot
+	ui.marketWin.w = wtot
+	ui.labelWin.w = wtot
+	ui.stockWin.w = wtot
+	ui.stockWin.h = htot - 7
+	ui.commandWin.w = wtot
+	ui.commandWin.y = htot - 1
+	ui.maxQuotesHeight = htot - 6
+}
+
+func (ui *Ui) Draw() {
 	fg, bg := termbox.ColorDefault, termbox.ColorDefault
 
 	termbox.Clear(fg, bg)
@@ -145,9 +178,23 @@ func (ui *Ui) draw() {
 	ui.drawMarketWin()
 	ui.drawLabelWin()
 	ui.drawStockWin()
-	ui.drawCommandWin(":add")
 
 	termbox.Flush()
+}
+func (ui *Ui) Prompt(cmd rune) {
+	ui.lineEditor.Prompt(cmd, ui.selectedQuote)
+}
+
+func (ui *Ui) ExecuteCommand() {
+	// execute some command
+	ui.lineEditor.Execute(ui.selectedQuote)
+	ui.lineEditor.Done()
+	ui.GetQuotes()
+	ui.Draw()
+}
+
+func (ui *Ui) HandleInputKey(ev termbox.Event) {
+	ui.lineEditor.Handle(ev)
 }
 
 // Temp for playing aroudn with termbox
@@ -181,7 +228,7 @@ func (ui *Ui) drawMarketWin() {
 
 	x := 0
 	y := 0
-	for _, q := range ui.marketQuotes {
+	for _, q := range *ui.marketQuotes {
 		humanFormatted := float2Str(q.LastTrade, 2)
 		tickerLine := fmt.Sprintf("%s ", marketNames[q.Ticker], humanFormatted, q.ChangePct)
 		if x+len(tickerLine) > ui.marketWin.w {
@@ -227,7 +274,13 @@ func (ui *Ui) drawStockWin() {
 			val, ok := fieldVal.(float64)
 			if ok {
 				humanFormatted := float2Str(val, ui.layout.columns[i].precision)
-				tickerLine = tickerLine + fmt.Sprintf("%-*v", ui.layout.columns[i].width, humanFormatted)
+				if (strings.Contains(ui.layout.columns[i].name, "Change") || strings.Contains(ui.layout.columns[i].name, "After") || strings.Contains(ui.layout.columns[i].name, "Pre")) && val >= 0 {
+					// TODO: just add an "advancing" field in Quote
+					humanFormatted = "+" + humanFormatted
+					tickerLine = tickerLine + fmt.Sprintf("%-*v", ui.layout.columns[i].width, humanFormatted)
+				} else {
+					tickerLine = tickerLine + fmt.Sprintf("%-*v", ui.layout.columns[i].width, humanFormatted)
+				}
 			} else {
 				tickerLine = tickerLine + fmt.Sprintf("%-*v", ui.layout.columns[i].width, v.Field(i).Interface())
 			}
@@ -237,17 +290,11 @@ func (ui *Ui) drawStockWin() {
 	}
 }
 
-func (ui *Ui) drawCommandWin(cmd string) {
-	fg, bg := termbox.ColorDefault, termbox.ColorDefault
-
-	// TODO:
-	ui.commandWin.print(0, 0, fg, bg, fmt.Sprintf("%s ", cmd))
-}
-
 func (ui *Ui) GetQuotes() {
 	var err error
 	ui.stockQuotes, err = FetchQuotes(ui.profile.Tickers)
 	if err != nil {
+		fmt.Printf("error : %v", err)
 		panic(err)
 	}
 
@@ -258,13 +305,14 @@ func (ui *Ui) GetQuotes() {
 	}
 	// update stock window size to make life easier for us
 	// bad practice? idc
-	if len(ui.stockQuotes) > ui.maxQuotesHeight {
+	if len(*ui.stockQuotes) > ui.maxQuotesHeight {
 		ui.stockWin.h = ui.maxQuotesHeight
-		ui.visibleQuotes = ui.stockQuotes[:ui.maxQuotesHeight]
+		ui.visibleQuotes = (*ui.stockQuotes)[:ui.maxQuotesHeight]
 	} else {
-		ui.stockWin.h = len(ui.stockQuotes)
-		ui.visibleQuotes = ui.stockQuotes
+		ui.stockWin.h = len(*ui.stockQuotes)
+		ui.visibleQuotes = *ui.stockQuotes
 	}
+	ui.lineEditor.quotes = ui.stockQuotes
 }
 
 func (ui *Ui) navigateStockDown() {
@@ -273,9 +321,9 @@ func (ui *Ui) navigateStockDown() {
 	if updatedPos < ui.stockWin.h {
 		ui.selectedQuote = updatedPos
 		ui.selectedVisibleQuote += 1
-	} else if updatedPos >= ui.stockWin.h && updatedPos < len(ui.stockQuotes) {
+	} else if updatedPos >= ui.stockWin.h && updatedPos < len(*ui.stockQuotes) {
 		ui.zerothQuote += 1
-		ui.visibleQuotes = ui.stockQuotes[updatedPos-ui.stockWin.h+1:]
+		ui.visibleQuotes = (*ui.stockQuotes)[updatedPos-ui.stockWin.h+1:]
 		ui.selectedQuote = updatedPos
 	}
 }
@@ -289,6 +337,6 @@ func (ui *Ui) navigateStockUp() {
 	} else if updatedPos < ui.zerothQuote && ui.zerothQuote > 0 {
 		ui.zerothQuote -= 1
 		ui.selectedQuote = updatedPos
-		ui.visibleQuotes = ui.stockQuotes[ui.zerothQuote : ui.zerothQuote+ui.stockWin.h]
+		ui.visibleQuotes = (*ui.stockQuotes)[ui.zerothQuote : ui.zerothQuote+ui.stockWin.h]
 	}
 }

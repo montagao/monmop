@@ -30,6 +30,7 @@ type app struct {
 	quitChan chan bool
 	keyQueue chan termbox.Event
 	profile  *profile
+	mode     mode
 }
 
 type profile struct {
@@ -64,6 +65,26 @@ func loadProfile(user *user.User) (*profile, error) {
 	}
 
 	return profile, nil
+}
+
+func (app *app) saveProfile() error {
+	user, err := user.Current()
+	if err != nil {
+		return err
+	}
+	profilePath := path.Join(user.HomeDir, defaultProfile)
+
+	var b []byte
+	b, err = json.Marshal(app.profile)
+	if err != nil {
+		return err
+	}
+
+	err = ioutil.WriteFile(profilePath, b, 0644)
+	if err != nil {
+		return err
+	}
+	return nil
 }
 
 func newApp() *app {
@@ -119,22 +140,45 @@ func (app *app) loop() {
 		case event := <-app.keyQueue:
 			switch event.Type {
 			case termbox.EventKey:
-				if event.Ch == 'q' || event.Ch == 'Q' {
-					fmt.Printf("See ya!")
-					return
-				} else if event.Ch == 'j' {
-					app.ui.navigateStockDown()
-					app.ui.draw()
-				} else if event.Ch == 'k' {
-					app.ui.navigateStockUp()
-					app.ui.draw()
-				} else if event.Ch == 'r' {
-					// r for  "refresh"
-					app.fetchAndDraw()
-				} else if event.Ch == 'a' {
-					// a for "add"
-
+				switch app.mode {
+				case COMMAND:
+					if event.Key == termbox.KeyEnter {
+						app.ui.ExecuteCommand()
+						app.fetchAndDraw()
+						app.mode = NORMAL
+					} else if event.Key == termbox.KeyEsc {
+						app.ui.lineEditor.Done()
+						app.mode = NORMAL
+					} else {
+						app.ui.HandleInputKey(event)
+					}
+				case NORMAL:
+					if event.Ch == 'q' || event.Ch == 'Q' {
+						app.saveProfile()
+						return
+					} else if event.Ch == 'j' {
+						app.ui.navigateStockDown()
+						app.ui.Draw()
+					} else if event.Ch == 'k' {
+						app.ui.navigateStockUp()
+						app.ui.Draw()
+					} else if event.Ch == 'r' {
+						// r for  "refresh"
+						app.fetchAndDraw()
+					} else if event.Ch == 'a' {
+						// a for "add"
+						app.ui.Prompt(event.Ch)
+						app.mode = COMMAND
+					} else if event.Ch == 'd' {
+						// a for "add"
+						app.ui.Prompt(event.Ch)
+						app.mode = COMMAND
+					}
 				}
+			case termbox.EventResize:
+				termbox.Clear(termbox.ColorDefault, termbox.ColorDefault)
+				app.ui.Resize()
+				app.ui.Draw()
 			}
 		case <-app.ticker.C:
 			app.fetchAndDraw()
@@ -144,5 +188,5 @@ func (app *app) loop() {
 
 func (app *app) fetchAndDraw() {
 	app.ui.GetQuotes()
-	app.ui.draw()
+	app.ui.Draw()
 }

@@ -54,32 +54,37 @@ type Quote struct {
 	AfterHours float64 `json:"postMarketChangePercent,omitempty"`
 }
 
-func FetchMarket() ([]Quote, error) {
+func FetchMarket() (*[]Quote, error) {
 	return FetchQuotes(marketTickers)
 }
 
 // retrieve quotes for all tickers
-func FetchQuotes(tickers []string) ([]Quote, error) {
+func FetchQuotes(tickers []string) (*[]Quote, error) {
 	result := []Quote{}
+	if len(tickers) == 0 {
+		return &result, nil
+	}
+
+	// fmt.Printf("Fetching quotes %v", tickers)
 	url := fmt.Sprintf(apiURLv7, strings.Join(tickers, `,`))
 
 	response, err := http.Get(url + apiURLv7ExtraParams)
 	if err != nil {
-		return result, err
+		return nil, err
 	}
 	defer response.Body.Close()
 
 	body, err := ioutil.ReadAll(response.Body)
 	if err != nil {
-		return result, err
+		return nil, err
 	}
 
 	result, err = unmarshalQuotes(body)
 	if err != nil {
-		return result, err
+		return nil, err
 	}
 
-	return result, nil
+	return &result, nil
 }
 
 // retrieve quote for a single ticker
@@ -92,6 +97,7 @@ func unmarshalQuotes(body []byte) ([]Quote, error) {
 	q := map[string]map[string][]Quote{}
 	err := json.Unmarshal(body, &q)
 	if err != nil {
+		fmt.Printf("body: %s", string(body))
 		return nil, err
 	}
 
