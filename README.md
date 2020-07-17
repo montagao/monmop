@@ -4,7 +4,7 @@ monmop is my own fork of [mop](https://github.com/mop-tracker/mop), which is a c
 
 ![Screenshot](https://raw.githubusercontent.com/montagao/monmop/master/docs/screenshot.png "monmop")
 
-This fork aims to add vim-like navigation and editing and being able to expand a stock to further look at it's graphs (WIP) and financials.
+This fork aims to add vim-like navigation and editing and being able to open up a ticker on wallmine/yahoo finance for more details.
 
 ### Installing monmop
 requires go v1.13+
@@ -17,7 +17,10 @@ $ monmop
 ### Using monmop
 ```
 o/Enter - open detailed page about selected ticker in browser
+j/k - navigate up or down
 a - add a list of comma separated tickers
 d - delete currently selected ticker
 / - search for a ticker
+q - quit monmop
+s - sort stock by label
 ```
