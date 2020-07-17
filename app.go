@@ -22,6 +22,7 @@ type mode int
 const (
 	NORMAL mode = iota
 	COMMAND
+	SORT
 )
 
 type app struct {
@@ -30,7 +31,7 @@ type app struct {
 	quitChan chan bool
 	keyQueue chan termbox.Event
 	profile  *profile
-	mode     mode
+	mode     *mode
 }
 
 type profile struct {
@@ -98,7 +99,8 @@ func newApp() *app {
 		panic(err)
 	}
 
-	ui := newUI(profile)
+	mode := NORMAL
+	ui := newUI(profile, &mode)
 
 	quitChan := make(chan bool, 1)
 	osChan := make(chan os.Signal, 1)
@@ -124,6 +126,7 @@ func newApp() *app {
 		ticker:   time.NewTicker(60 * time.Second),
 		keyQueue: keyQueue,
 		profile:  profile,
+		mode:     &mode,
 	}
 
 }
@@ -140,15 +143,15 @@ func (app *app) loop() {
 		case event := <-app.keyQueue:
 			switch event.Type {
 			case termbox.EventKey:
-				switch app.mode {
+				switch *app.mode {
 				case COMMAND:
 					if event.Key == termbox.KeyEnter {
 						app.ui.ExecuteCommand()
 						app.fetchAndDraw()
-						app.mode = NORMAL
+						*app.mode = NORMAL
 					} else if event.Key == termbox.KeyEsc {
 						app.ui.lineEditor.Done()
-						app.mode = NORMAL
+						*app.mode = NORMAL
 					} else {
 						app.ui.HandleInputKey(event)
 					}
@@ -165,18 +168,35 @@ func (app *app) loop() {
 					} else if event.Ch == 'r' {
 						// r for  "refresh"
 						app.fetchAndDraw()
+					} else if event.Ch == 's' {
+						// s for  "sort"
+						*app.mode = SORT
+						app.ui.Draw()
 					} else if event.Ch == 'a' {
 						// a for "add"
 						app.ui.Prompt(event.Ch)
-						app.mode = COMMAND
+						*app.mode = COMMAND
 					} else if event.Ch == 'd' {
 						// a for "add"
 						app.ui.Prompt(event.Ch)
-						app.mode = COMMAND
+						*app.mode = COMMAND
 					} else if event.Ch == 'o' || event.Key == termbox.KeyEnter {
 						app.ui.OpenInBrowser()
 					}
+				case SORT:
+					if event.Ch == 'q' || event.Ch == 'Q' {
+						app.saveProfile()
+						return
+					} else if event.Ch == 'h' || event.Ch == 'l' {
+						app.ui.NavigateLabel(event.Ch)
+					} else if event.Ch == 'j' || event.Ch == 'k' {
+						app.ui.SortLabel(event.Ch)
+					} else if event.Key == termbox.KeyEsc {
+						*app.mode = NORMAL
+						app.ui.Draw()
+					}
 				}
+
 			case termbox.EventResize:
 				termbox.Clear(termbox.ColorDefault, termbox.ColorDefault)
 				app.ui.Resize()

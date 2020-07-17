@@ -6,6 +6,7 @@ import (
 	"os/exec"
 	"reflect"
 	"runtime"
+	"sort"
 	"strings"
 	"time"
 	"unicode/utf8"
@@ -29,6 +30,11 @@ var marketNames = map[string]string{
 	"CL=F":     "Oil",
 	"GC=F":     "Gold",
 }
+
+const (
+	DESCENDING_CHAR string = "🠕"
+	ASCENDING_CHAR  string = "🠗"
+)
 
 // win
 type Win struct {
@@ -71,12 +77,14 @@ func (win *Win) Clear() {
 
 // thin wrapper around TermBox to provide basic UI for monmop
 type Ui struct {
-	titleWin             *Win
-	marketWin            *Win
-	labelWin             *Win
-	stockWin             *Win
-	commandWin           *Win
-	layout               *Layout
+	titleWin   *Win
+	marketWin  *Win
+	labelWin   *Win
+	stockWin   *Win
+	commandWin *Win
+
+	layout *Layout
+
 	selectedQuote        int
 	zerothQuote          int
 	selectedVisibleQuote int
@@ -85,11 +93,15 @@ type Ui struct {
 	visibleQuotes        []Quote
 	marketQuotes         *[]Quote
 	maxQuotesHeight      int
-	profile              *profile
-	lineEditor           *LineEditor
+	selectedLabel        int
+	sortSymbol           string
+
+	mode       *mode
+	profile    *profile
+	lineEditor *LineEditor
 }
 
-func newUI(profile *profile) *Ui {
+func newUI(profile *profile, mode *mode) *Ui {
 	wtot, htot := termbox.Size()
 
 	eventQ := make(chan termbox.Event)
@@ -145,6 +157,9 @@ func newUI(profile *profile) *Ui {
 		selectedQuote:   0,
 		selectedSort:    0,
 		zerothQuote:     0,
+		selectedLabel:   0,
+		sortSymbol:      DESCENDING_CHAR,
+		mode:            mode,
 		profile:         profile,
 		maxQuotesHeight: htot - 7,
 		lineEditor: NewLineEditor(
@@ -220,6 +235,72 @@ func (ui *Ui) OpenInBrowser() {
 	}
 }
 
+func (ui *Ui) NavigateLabel(key rune) {
+	if key == 'h' {
+		ui.navigateLabelLeft()
+	} else if key == 'l' {
+		ui.navigateLabelRight()
+	}
+	ui.Draw()
+}
+
+func (ui *Ui) SortLabel(key rune) {
+	if key == 'j' {
+		ui.sortSymbol = DESCENDING_CHAR
+		ui.sortByLabelDsc()
+	} else if key == 'k' {
+		ui.sortSymbol = ASCENDING_CHAR
+		ui.sortByLabelAsc()
+	}
+	ui.Draw()
+}
+
+func (ui *Ui) navigateLabelLeft() {
+	if ui.selectedLabel > 0 {
+		ui.selectedLabel -= 1
+	}
+}
+
+func (ui *Ui) navigateLabelRight() {
+	if ui.selectedLabel < len(ui.layout.columns)-1 {
+		ui.selectedLabel += 1
+	}
+}
+
+func (ui *Ui) sortByLabelDsc() {
+	sort.Slice(*ui.stockQuotes, func(i, j int) bool {
+		q := reflect.ValueOf((*ui.stockQuotes)[i]).Field(ui.selectedLabel).Interface()
+		r := reflect.ValueOf((*ui.stockQuotes)[j]).Field(ui.selectedLabel).Interface()
+		f1, isFloat := q.(float64)
+
+		if isFloat {
+			f2, _ := r.(float64)
+			return f1 > f2
+		} else {
+			str, _ := q.(string)
+			str2, _ := r.(string)
+			return str > str2
+		}
+	})
+}
+
+func (ui *Ui) sortByLabelAsc() {
+	sort.Slice(*ui.stockQuotes, func(i, j int) bool {
+		q := reflect.ValueOf((*ui.stockQuotes)[i]).Field(ui.selectedLabel).Interface()
+		r := reflect.ValueOf((*ui.stockQuotes)[j]).Field(ui.selectedLabel).Interface()
+		f1, isFloat := q.(float64)
+
+		if isFloat {
+			f2, _ := r.(float64)
+			return f1 < f2
+		} else {
+			str, _ := q.(string)
+			str2, _ := r.(string)
+			return str < str2
+		}
+	})
+}
+
 // Temp for playing aroudn with termbox
 func (ui *Ui) drawTitleLine() {
 	fg, bg := termbox.ColorDefault|termbox.AttrBold, termbox.ColorDefault
@@ -238,12 +319,24 @@ func (ui *Ui) drawTitleLine() {
 func (ui *Ui) drawLabelWin() {
 	fg, bg := termbox.ColorDefault|termbox.AttrUnderline, termbox.ColorDefault
 
-	labels := ""
-	for _, col := range ui.layout.columns {
-		labels = labels + fmt.Sprintf("%-*v", col.width, col.name)
+	x := 0
+	var label string
+
+	for id, col := range ui.layout.columns {
+		if id == ui.selectedLabel && *ui.mode == SORT {
+			label = fmt.Sprintf("%-*v", col.width, col.name+" "+ui.sortSymbol)
+			ui.labelWin.print(x, 0, termbox.ColorBlack, termbox.ColorWhite, label)
+		} else if id == ui.selectedLabel && *ui.mode != SORT {
+			// TODO: draw arrow based on sort typea (asc/dsc)
+			label = fmt.Sprintf("%-*v", col.width, col.name+" "+ui.sortSymbol)
+			ui.labelWin.print(x, 0, fg, bg, label)
+		} else {
+			label = fmt.Sprintf("%-*v", col.width, col.name)
+			ui.labelWin.print(x, 0, fg, bg, label)
+		}
+		x += utf8.RuneCountInString(label)
 	}
 
-	ui.labelWin.print(0, 0, fg, bg, labels)
 }
 
 func (ui *Ui) drawMarketWin() {
@@ -285,7 +378,7 @@ func (ui *Ui) drawStockWin() {
 			lineColor = termbox.ColorRed
 		}
 
-		if ui.selectedVisibleQuote == id {
+		if ui.selectedVisibleQuote == id && *ui.mode == NORMAL {
 			highlightColor = termbox.ColorWhite
 			lineColor = termbox.ColorBlack
 		}
