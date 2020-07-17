@@ -173,6 +173,8 @@ func (app *app) loop() {
 						// a for "add"
 						app.ui.Prompt(event.Ch)
 						app.mode = COMMAND
+					} else if event.Ch == 'o' || event.Key == termbox.KeyEnter {
+						app.ui.OpenInBrowser()
 					}
 				}
 			case termbox.EventResize:

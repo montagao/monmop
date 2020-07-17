@@ -2,7 +2,10 @@ package main
 
 import (
 	"fmt"
+	"log"
+	"os/exec"
 	"reflect"
+	"runtime"
 	"strings"
 	"time"
 	"unicode/utf8"
@@ -143,7 +146,7 @@ func newUI(profile *profile) *Ui {
 		selectedSort:    0,
 		zerothQuote:     0,
 		profile:         profile,
-		maxQuotesHeight: htot - 6,
+		maxQuotesHeight: htot - 7,
 		lineEditor: NewLineEditor(
 			profile,
 			nil,
@@ -167,7 +170,7 @@ func (ui *Ui) Resize() {
 	ui.stockWin.h = htot - 7
 	ui.commandWin.w = wtot
 	ui.commandWin.y = htot - 1
-	ui.maxQuotesHeight = htot - 6
+	ui.maxQuotesHeight = htot - 7
 }
 
 func (ui *Ui) Draw() {
@@ -195,6 +198,26 @@ func (ui *Ui) ExecuteCommand() {
 
 func (ui *Ui) HandleInputKey(ev termbox.Event) {
 	ui.lineEditor.Handle(ev)
+}
+
+func (ui *Ui) OpenInBrowser() {
+	var err error
+	q := (*ui.stockQuotes)[ui.selectedQuote]
+	url := "https://wallmine.com/" + q.Ticker
+
+	switch runtime.GOOS {
+	case "linux":
+		err = exec.Command("xdg-open", url).Start()
+	case "windows":
+		err = exec.Command("rundll32", "url.dll,FileProtocolHandler", url).Start()
+	case "darwin":
+		err = exec.Command("open", url).Start()
+	default:
+		err = fmt.Errorf("unsupported platform")
+	}
+	if err != nil {
+		log.Fatal(err)
+	}
 }
 
 // Temp for playing aroudn with termbox
@@ -317,6 +340,7 @@ func (ui *Ui) GetQuotes() {
 
 func (ui *Ui) navigateStockDown() {
 	// navigate down a line in the stock window
+	// TODO there's a bug in here....
 	updatedPos := ui.selectedQuote + 1
 	if updatedPos < ui.stockWin.h {
 		ui.selectedQuote = updatedPos

@@ -85,6 +85,8 @@ func (editor *LineEditor) Execute(selectedQuote int) {
 			editor.profile.Tickers = append(editor.profile.Tickers[:selectedQuote], editor.profile.Tickers[selectedQuote+1:]...)
 		}
 	case '/':
+		// perform a search on a ticker
+
 	}
 }
 

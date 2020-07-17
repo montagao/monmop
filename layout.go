@@ -31,7 +31,7 @@ func NewLayout() *Layout {
 		{10, `High`, 4},
 		{15, `Avg Volume`, 2},
 		{10, `P/E`, 2},
-		{10, `Yield %`, 2},
+		{10, `Dividend`, 2},
 		{15, `Market Cap`, 4},
 		{15, `Pre Open %`, 2},
 		{15, `After Hours %`, 2},
