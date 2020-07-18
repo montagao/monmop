@@ -37,6 +37,8 @@ const (
 	ASCENDING_CHAR  string = "🠗"
 )
 
+const appTitle = "monmop 0.1"
+
 // win
 type Win struct {
 	w, h, x, y int
@@ -206,12 +208,13 @@ func (ui *Ui) Prompt(cmd rune) {
 
 func (ui *Ui) ExecuteCommand() {
 	// execute some command
-	ui.lineEditor.Execute(ui.selectedQuote)
+	oldQuoteId := ui.lineEditor.Execute(ui.selectedQuote)
 	ui.lineEditor.Done()
 	if ui.lineEditor.cmd == 'a' {
 		ui.GetQuotes()
 	}
 
+	ui.resetSelection((*ui.stockQuotes)[oldQuoteId])
 	ui.Draw()
 }
 
@@ -327,9 +330,9 @@ func (ui *Ui) resetSelection(oldQ Quote) {
 			} else if id >= ui.zerothQuote+ui.stockWin.h {
 				// case if selected quote is below current window
 				// Do nothing.
-				// for id >= ui.zerothQuote+ui.stockWin.h {
-				// 	ui.navigateStockDown()
-				// }
+				for id >= ui.zerothQuote+ui.stockWin.h {
+					ui.navigateStockDown()
+				}
 			} else {
 				// case if selected quote is exists in current window
 				ui.selectedQuote = id
@@ -346,11 +349,10 @@ func (ui *Ui) drawTitleLine() {
 
 	currentTime := time.Now()
 
-	titleString := "Monmop by Monta"
 	timeString := currentTime.Format(time.UnixDate)
 
 	// %v and -%v for right and left justification respectively
-	title := fmt.Sprintf("%-*v%*v", ui.titleWin.w/2, titleString, ui.titleWin.w/2, timeString)
+	title := fmt.Sprintf("%-*v%*v", ui.titleWin.w/2, appTitle, ui.titleWin.w/2, timeString)
 
 	ui.titleWin.print(0, 0, fg, bg, title)
 }
@@ -429,6 +431,10 @@ func (ui *Ui) drawStockWin() {
 			val, ok := fieldVal.(float64)
 			if ok {
 				humanFormatted := float2Str(val, ui.layout.columns[i].precision)
+				if strings.Contains(ui.layout.columns[i].name, "Dividend") {
+					// get dividend yield %
+					val = (val / q.LastTrade) * 100
+				}
 				if (strings.Contains(ui.layout.columns[i].name, "Change") || strings.Contains(ui.layout.columns[i].name, "After") || strings.Contains(ui.layout.columns[i].name, "Pre")) && val >= 0 {
 					// TODO: just add an "advancing" field in Quote
 					humanFormatted = "+" + humanFormatted

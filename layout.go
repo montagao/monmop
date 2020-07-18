@@ -29,12 +29,13 @@ func NewLayout() *Layout {
 		{10, `Open`, 4},
 		{10, `Low`, 4},
 		{10, `High`, 4},
+		{10, `Volume`, 2},
 		{15, `Avg Volume`, 2},
 		{10, `P/E`, 2},
-		{10, `Dividend`, 2},
-		{15, `Market Cap`, 4},
-		{15, `Pre Open %`, 2},
-		{15, `After Hours %`, 2},
+		{15, `Dividend %`, 2},
+		{15, `Mkt Cap`, 4},
+		{15, `PreChg %`, 2},
+		{15, `AfterChg %`, 2},
 	}
 
 	return layout

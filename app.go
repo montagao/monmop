@@ -147,7 +147,7 @@ func (app *app) loop() {
 				case COMMAND:
 					if event.Key == termbox.KeyEnter {
 						app.ui.ExecuteCommand()
-						app.fetchAndDraw()
+						// app.fetchAndDraw()
 						*app.mode = NORMAL
 					} else if event.Key == termbox.KeyEsc {
 						app.ui.lineEditor.Done()

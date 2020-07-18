@@ -41,7 +41,7 @@ type Quote struct {
 	High      float64 `json:"regularMarketDayHigh"`       // h: day's high.
 	// Low52      float64 `json:"fiftyTwoWeekLow"`             // j: 52-weeks low.
 	// High52     float64 `json:"fiftyTwoWeekHigh"`            // k: 52-weeks high.
-	// Volume    float64 `json:"regularMarketVolume"`     // v: volume.
+	Volume    float64 `json:"regularMarketVolume"`     // v: volume.
 	AvgVolume float64 `json:"averageDailyVolume10Day"` // a2: average volume.
 	PeRatio   float64 `json:"trailingPE"`              // r2: P/E ration real time.
 	// PeRatioX   float64 `json:"trailingPE"`                  // r: P/E ration (fallback when real time is N/A).

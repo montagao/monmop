@@ -73,7 +73,7 @@ func (editor *LineEditor) Done() {
 	editor.cursor = 0
 }
 
-func (editor *LineEditor) Execute(selectedQuote int) {
+func (editor *LineEditor) Execute(selectedQuote int) (newQuote int) {
 	switch editor.cmd {
 	case 'a':
 		tickers := editor.tokenize()
@@ -82,7 +82,7 @@ func (editor *LineEditor) Execute(selectedQuote int) {
 		}
 	case 'd':
 		if strings.TrimSpace(strings.ToLower(editor.input)) == "y" {
-			for id, _ := range *editor.quotes {
+			for id := range *editor.quotes {
 				if q := (*editor.quotes)[id]; id == selectedQuote {
 					// remove from list of tickers
 					editor.profile.Tickers = removeTicker(editor.profile.Tickers, q.Ticker)
@@ -93,8 +93,14 @@ func (editor *LineEditor) Execute(selectedQuote int) {
 		}
 	case '/':
 		// perform a search on a ticker
+		for id, q := range *editor.quotes {
+			if strings.TrimSpace(strings.ToUpper(editor.input)) == q.Ticker {
+				return id
+			}
 
+		}
 	}
+	return selectedQuote
 }
 
 func removeTicker(s []string, r string) []string {
