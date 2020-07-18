@@ -45,7 +45,7 @@ type Quote struct {
 	AvgVolume float64 `json:"averageDailyVolume10Day"` // a2: average volume.
 	PeRatio   float64 `json:"trailingPE"`              // r2: P/E ration real time.
 	// PeRatioX   float64 `json:"trailingPE"`                  // r: P/E ration (fallback when real time is N/A).
-	Dividend float64 `json:"trailingAnnualDividendRate"` // d: dividend.
+	Dividend float64 `json:"trailingAnnualDividendYield"` // d: dividend.
 	// Yield      float64 `json:"trailingAnnualDividendYield"` // y: dividend yield.
 	MarketCap float64 `json:"marketCap"` // j3: market cap real time.
 	// MarketCapX float64 `json:"marketCap"`                   // j1: market cap (fallback when real time is N/A).

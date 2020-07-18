@@ -32,7 +32,7 @@ func NewLayout() *Layout {
 		{10, `Volume`, 2},
 		{15, `Avg Volume`, 2},
 		{10, `P/E`, 2},
-		{15, `Dividend %`, 2},
+		{10, `Divd %`, 2},
 		{15, `Mkt Cap`, 4},
 		{15, `PreChg %`, 2},
 		{15, `AfterChg %`, 2},

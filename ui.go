@@ -210,9 +210,9 @@ func (ui *Ui) ExecuteCommand() {
 	// execute some command
 	oldQuoteId := ui.lineEditor.Execute(ui.selectedQuote)
 	ui.lineEditor.Done()
-	if ui.lineEditor.cmd == 'a' {
-		ui.GetQuotes()
-	}
+	// if ui.lineEditor.cmd == 'a' {
+	ui.GetQuotes()
+	// }
 
 	ui.resetSelection((*ui.stockQuotes)[oldQuoteId])
 	ui.Draw()
@@ -295,6 +295,7 @@ func (ui *Ui) sortByLabelDsc() {
 			return str > str2
 		}
 	})
+	ui.profile.Tickers = ui.getSortedTickers(*ui.stockQuotes)
 	ui.resetSelection(oldQ)
 
 }
@@ -315,8 +316,8 @@ func (ui *Ui) sortByLabelAsc() {
 			return str < str2
 		}
 	})
+	ui.profile.Tickers = ui.getSortedTickers(*ui.stockQuotes)
 	ui.resetSelection(oldQ)
-
 }
 
 func (ui *Ui) resetSelection(oldQ Quote) {
@@ -341,6 +342,14 @@ func (ui *Ui) resetSelection(oldQ Quote) {
 			break
 		}
 	}
+}
+
+func (ui *Ui) getSortedTickers(quotes []Quote) []string {
+	tickers := make([]string, len(quotes))
+	for id, q := range quotes {
+		tickers[id] = q.Ticker
+	}
+	return tickers
 }
 
 // Temp for playing aroudn with termbox
@@ -409,6 +418,14 @@ func (ui *Ui) drawStockWin() {
 	for id, q := range ui.visibleQuotes {
 		tickerLine := ""
 		highlightColor := bg
+		if q.Ticker == "" {
+			// TODO BAD antipattern, should fix this
+			// im only doing this because "deleting" a quote
+			// messes up the visible quotes slice in the edge case
+			// where we are looking at the tail end of quotes
+			// it works though...
+			continue
+		}
 
 		var lineColor termbox.Attribute
 		if q.Change > 0 {
@@ -430,11 +447,11 @@ func (ui *Ui) drawStockWin() {
 			fieldVal := v.Field(i).Interface()
 			val, ok := fieldVal.(float64)
 			if ok {
-				humanFormatted := float2Str(val, ui.layout.columns[i].precision)
-				if strings.Contains(ui.layout.columns[i].name, "Dividend") {
+				if strings.Contains(ui.layout.columns[i].name, "Div") {
 					// get dividend yield %
-					val = (val / q.LastTrade) * 100
+					val = val * 100
 				}
+				humanFormatted := float2Str(val, ui.layout.columns[i].precision)
 				if (strings.Contains(ui.layout.columns[i].name, "Change") || strings.Contains(ui.layout.columns[i].name, "After") || strings.Contains(ui.layout.columns[i].name, "Pre")) && val >= 0 {
 					// TODO: just add an "advancing" field in Quote
 					humanFormatted = "+" + humanFormatted
@@ -507,7 +524,7 @@ func (ui *Ui) navigateStockDown() {
 		ui.selectedVisibleQuote += 1
 	} else if ui.selectedVisibleQuote+1 >= ui.stockWin.h && updatedPos < len(*ui.stockQuotes) {
 		ui.zerothQuote += 1
-		ui.visibleQuotes = (*ui.stockQuotes)[updatedPos-ui.stockWin.h+1:]
+		ui.visibleQuotes = (*ui.stockQuotes)[ui.zerothQuote : ui.zerothQuote+ui.stockWin.h]
 		ui.selectedQuote = updatedPos
 	}
 }

@@ -78,8 +78,10 @@ func (editor *LineEditor) Execute(selectedQuote int) (newQuote int) {
 	case 'a':
 		tickers := editor.tokenize()
 		if len(tickers) > 0 {
+			// TODO: do some basic checks on tickers
 			editor.profile.Tickers = append(editor.profile.Tickers, tickers...)
 		}
+		return getTickerId(editor.profile.Tickers, tickers[len(tickers)-1])
 	case 'd':
 		if strings.TrimSpace(strings.ToLower(editor.input)) == "y" {
 			for id := range *editor.quotes {
@@ -161,4 +163,13 @@ func (editor *LineEditor) tokenize() []string {
 		fields[i] = strings.TrimSpace(fields[i])
 	}
 	return fields
+}
+
+func getTickerId(tickers []string, ticker string) int {
+	for p, v := range tickers {
+		if v == ticker {
+			return p
+		}
+	}
+	return -1
 }
