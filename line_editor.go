@@ -82,7 +82,14 @@ func (editor *LineEditor) Execute(selectedQuote int) {
 		}
 	case 'd':
 		if strings.TrimSpace(strings.ToLower(editor.input)) == "y" {
-			editor.profile.Tickers = append(editor.profile.Tickers[:selectedQuote], editor.profile.Tickers[selectedQuote+1:]...)
+			for id, _ := range *editor.quotes {
+				if q := (*editor.quotes)[id]; id == selectedQuote {
+					// remove from list of tickers
+					editor.profile.Tickers = removeTicker(editor.profile.Tickers, q.Ticker)
+					// TODO: prevent adding duplicate tickers
+					break
+				}
+			}
 		}
 	case '/':
 		// perform a search on a ticker
@@ -90,6 +97,14 @@ func (editor *LineEditor) Execute(selectedQuote int) {
 	}
 }
 
+func removeTicker(s []string, r string) []string {
+	for i, v := range s {
+		if v == r {
+			return append(s[:i], s[i+1:]...)
+		}
+	}
+	return s
+}
 func (editor *LineEditor) insertCharacter(ch rune) {
 	fg, bg := termbox.ColorDefault, termbox.ColorDefault
 	if editor.cursor < len(editor.input) {

@@ -165,6 +165,12 @@ func (app *app) loop() {
 					} else if event.Ch == 'k' {
 						app.ui.navigateStockUp()
 						app.ui.Draw()
+					} else if event.Ch == 'g' {
+						app.ui.navigateStockBeginning()
+						app.ui.Draw()
+					} else if event.Ch == 'G' {
+						app.ui.navigateStockEnd()
+						app.ui.Draw()
 					} else if event.Ch == 'r' {
 						// r for  "refresh"
 						app.fetchAndDraw()
@@ -180,6 +186,10 @@ func (app *app) loop() {
 						// a for "add"
 						app.ui.Prompt(event.Ch)
 						*app.mode = COMMAND
+					} else if event.Ch == '/' {
+						// a for "add"
+						app.ui.Prompt(event.Ch)
+						*app.mode = COMMAND
 					} else if event.Ch == 'o' || event.Key == termbox.KeyEnter {
 						app.ui.OpenInBrowser()
 					}
@@ -187,7 +197,9 @@ func (app *app) loop() {
 					if event.Ch == 'q' || event.Ch == 'Q' {
 						app.saveProfile()
 						return
-					} else if event.Ch == 'h' || event.Ch == 'l' {
+					} else if event.Ch == 'h' || event.Ch == 'l' || event.Ch == 'b' || event.Ch == 'e' {
+						app.ui.NavigateLabel(event.Ch)
+					} else if event.Ch == '0' || event.Ch == '$' {
 						app.ui.NavigateLabel(event.Ch)
 					} else if event.Ch == 'j' || event.Ch == 'k' {
 						app.ui.SortLabel(event.Ch)

@@ -32,6 +32,7 @@ var marketNames = map[string]string{
 }
 
 const (
+	NO_CHAR         string = " "
 	DESCENDING_CHAR string = "🠕"
 	ASCENDING_CHAR  string = "🠗"
 )
@@ -158,7 +159,7 @@ func newUI(profile *profile, mode *mode) *Ui {
 		selectedSort:    0,
 		zerothQuote:     0,
 		selectedLabel:   0,
-		sortSymbol:      DESCENDING_CHAR,
+		sortSymbol:      NO_CHAR,
 		mode:            mode,
 		profile:         profile,
 		maxQuotesHeight: htot - 7,
@@ -207,7 +208,10 @@ func (ui *Ui) ExecuteCommand() {
 	// execute some command
 	ui.lineEditor.Execute(ui.selectedQuote)
 	ui.lineEditor.Done()
-	ui.GetQuotes()
+	if ui.lineEditor.cmd == 'a' {
+		ui.GetQuotes()
+	}
+
 	ui.Draw()
 }
 
@@ -236,10 +240,14 @@ func (ui *Ui) OpenInBrowser() {
 }
 
 func (ui *Ui) NavigateLabel(key rune) {
-	if key == 'h' {
+	if key == 'h' || key == 'b' {
 		ui.navigateLabelLeft()
-	} else if key == 'l' {
+	} else if key == 'l' || key == 'e' {
 		ui.navigateLabelRight()
+	} else if key == '0' {
+		ui.selectedLabel = 0
+	} else if key == '$' {
+		ui.selectedLabel = len(ui.layout.columns) - 1
 	}
 	ui.Draw()
 }
@@ -268,7 +276,9 @@ func (ui *Ui) navigateLabelRight() {
 }
 
 func (ui *Ui) sortByLabelDsc() {
-	sort.Slice(*ui.stockQuotes, func(i, j int) bool {
+	oldQ := (*ui.stockQuotes)[ui.selectedQuote]
+
+	sort.SliceStable(*ui.stockQuotes, func(i, j int) bool {
 		q := reflect.ValueOf((*ui.stockQuotes)[i]).Field(ui.selectedLabel).Interface()
 		r := reflect.ValueOf((*ui.stockQuotes)[j]).Field(ui.selectedLabel).Interface()
 		f1, isFloat := q.(float64)
@@ -282,10 +292,13 @@ func (ui *Ui) sortByLabelDsc() {
 			return str > str2
 		}
 	})
+	ui.resetSelection(oldQ)
+
 }
 
 func (ui *Ui) sortByLabelAsc() {
-	sort.Slice(*ui.stockQuotes, func(i, j int) bool {
+	oldQ := (*ui.stockQuotes)[ui.selectedQuote]
+	sort.SliceStable(*ui.stockQuotes, func(i, j int) bool {
 		q := reflect.ValueOf((*ui.stockQuotes)[i]).Field(ui.selectedLabel).Interface()
 		r := reflect.ValueOf((*ui.stockQuotes)[j]).Field(ui.selectedLabel).Interface()
 		f1, isFloat := q.(float64)
@@ -299,6 +312,32 @@ func (ui *Ui) sortByLabelAsc() {
 			return str < str2
 		}
 	})
+	ui.resetSelection(oldQ)
+
+}
+
+func (ui *Ui) resetSelection(oldQ Quote) {
+	for id, _ := range *ui.stockQuotes {
+		if (*ui.stockQuotes)[id] == oldQ {
+			if id < ui.zerothQuote {
+				// case if selected quote above current window
+				for id < ui.zerothQuote {
+					ui.navigateStockUp()
+				}
+			} else if id >= ui.zerothQuote+ui.stockWin.h {
+				// case if selected quote is below current window
+				// Do nothing.
+				// for id >= ui.zerothQuote+ui.stockWin.h {
+				// 	ui.navigateStockDown()
+				// }
+			} else {
+				// case if selected quote is exists in current window
+				ui.selectedQuote = id
+				ui.selectedVisibleQuote = ui.selectedQuote - ui.zerothQuote
+			}
+			break
+		}
+	}
 }
 
 // Temp for playing aroudn with termbox
@@ -378,7 +417,7 @@ func (ui *Ui) drawStockWin() {
 			lineColor = termbox.ColorRed
 		}
 
-		if ui.selectedVisibleQuote == id && *ui.mode == NORMAL {
+		if ui.selectedVisibleQuote == id && *ui.mode != SORT {
 			highlightColor = termbox.ColorWhite
 			lineColor = termbox.ColorBlack
 		}
@@ -423,22 +462,44 @@ func (ui *Ui) GetQuotes() {
 	// bad practice? idc
 	if len(*ui.stockQuotes) > ui.maxQuotesHeight {
 		ui.stockWin.h = ui.maxQuotesHeight
-		ui.visibleQuotes = (*ui.stockQuotes)[:ui.maxQuotesHeight]
+		ui.visibleQuotes = (*ui.stockQuotes)[ui.zerothQuote : ui.zerothQuote+ui.maxQuotesHeight]
 	} else {
 		ui.stockWin.h = len(*ui.stockQuotes)
+		// TODO: bug when deleting last quote?
 		ui.visibleQuotes = *ui.stockQuotes
 	}
 	ui.lineEditor.quotes = ui.stockQuotes
+
+	if ui.sortSymbol == DESCENDING_CHAR {
+		ui.SortLabel('j')
+	} else if ui.sortSymbol == ASCENDING_CHAR {
+		ui.SortLabel('k')
+	}
+}
+
+func (ui *Ui) navigateStockBeginning() {
+	ui.zerothQuote = 0
+	ui.selectedQuote = 0
+	ui.selectedVisibleQuote = 0
+	ui.visibleQuotes = (*ui.stockQuotes)[0:ui.stockWin.h]
+}
+
+func (ui *Ui) navigateStockEnd() {
+	// surely this can be refactored/simplified
+	ui.zerothQuote = len(*ui.stockQuotes) % ui.stockWin.h
+	ui.selectedQuote = len(*ui.stockQuotes) - 1
+	ui.selectedVisibleQuote = ui.stockWin.h - 1
+	ui.visibleQuotes = (*ui.stockQuotes)[ui.zerothQuote:len(*ui.stockQuotes)]
+	// fmt.Printf("zeroth: %d selected: %d visibleSelected: %d  visible: %v maxQuotesHeight: %d lenQuotes %d", ui.zerothQuote, ui.selectedQuote, ui.selectedVisibleQuote, ui.visibleQuotes, ui.maxQuotesHeight, len(*ui.stockQuotes))
 }
 
 func (ui *Ui) navigateStockDown() {
 	// navigate down a line in the stock window
-	// TODO there's a bug in here....
 	updatedPos := ui.selectedQuote + 1
-	if updatedPos < ui.stockWin.h {
+	if ui.selectedVisibleQuote+1 < ui.stockWin.h {
 		ui.selectedQuote = updatedPos
 		ui.selectedVisibleQuote += 1
-	} else if updatedPos >= ui.stockWin.h && updatedPos < len(*ui.stockQuotes) {
+	} else if ui.selectedVisibleQuote+1 >= ui.stockWin.h && updatedPos < len(*ui.stockQuotes) {
 		ui.zerothQuote += 1
 		ui.visibleQuotes = (*ui.stockQuotes)[updatedPos-ui.stockWin.h+1:]
 		ui.selectedQuote = updatedPos
@@ -448,7 +509,7 @@ func (ui *Ui) navigateStockDown() {
 func (ui *Ui) navigateStockUp() {
 	// navigate up a line in the stock window
 	updatedPos := ui.selectedQuote - 1
-	if updatedPos >= ui.zerothQuote {
+	if ui.selectedVisibleQuote-1 >= 0 {
 		ui.selectedQuote = updatedPos
 		ui.selectedVisibleQuote -= 1
 	} else if updatedPos < ui.zerothQuote && ui.zerothQuote > 0 {
