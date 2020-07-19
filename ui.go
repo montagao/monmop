@@ -211,10 +211,15 @@ func (ui *Ui) ExecuteCommand() {
 	oldQuoteId := ui.lineEditor.Execute(ui.selectedQuote)
 	ui.lineEditor.Done()
 	// if ui.lineEditor.cmd == 'a' {
+	if oldQuoteId >= 0 {
+		ui.selectedQuote = oldQuoteId
+	}
 	ui.GetQuotes()
 	// }
 
-	ui.resetSelection((*ui.stockQuotes)[oldQuoteId])
+	if oldQuoteId >= 0 {
+		ui.resetSelection((*ui.stockQuotes)[oldQuoteId])
+	}
 	ui.Draw()
 }
 
@@ -501,19 +506,15 @@ func (ui *Ui) GetQuotes() {
 }
 
 func (ui *Ui) navigateStockBeginning() {
-	ui.zerothQuote = 0
-	ui.selectedQuote = 0
-	ui.selectedVisibleQuote = 0
-	ui.visibleQuotes = (*ui.stockQuotes)[0:ui.stockWin.h]
+	for ui.selectedQuote > 0 {
+		ui.navigateStockUp()
+	}
 }
 
 func (ui *Ui) navigateStockEnd() {
-	// surely this can be refactored/simplified
-	ui.zerothQuote = len(*ui.stockQuotes) % ui.stockWin.h
-	ui.selectedQuote = len(*ui.stockQuotes) - 1
-	ui.selectedVisibleQuote = ui.stockWin.h - 1
-	ui.visibleQuotes = (*ui.stockQuotes)[ui.zerothQuote:len(*ui.stockQuotes)]
-	// fmt.Printf("zeroth: %d selected: %d visibleSelected: %d  visible: %v maxQuotesHeight: %d lenQuotes %d", ui.zerothQuote, ui.selectedQuote, ui.selectedVisibleQuote, ui.visibleQuotes, ui.maxQuotesHeight, len(*ui.stockQuotes))
+	for ui.selectedQuote < len(*ui.stockQuotes)-1 {
+		ui.navigateStockDown()
+	}
 }
 
 func (ui *Ui) navigateStockDown() {

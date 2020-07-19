@@ -89,7 +89,7 @@ func (editor *LineEditor) Execute(selectedQuote int) (newQuote int) {
 					// remove from list of tickers
 					editor.profile.Tickers = removeTicker(editor.profile.Tickers, q.Ticker)
 					// TODO: prevent adding duplicate tickers
-					break
+					return selectedQuote - 1
 				}
 			}
 		}
