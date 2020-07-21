@@ -23,17 +23,17 @@ func NewLayout() *Layout {
 	layout := &Layout{}
 	layout.columns = []Column{
 		{10, `Ticker`, 0},
-		{10, `Last`, 4},
-		{10, `Change`, 4},
+		{10, `Last`, 2},
+		{10, `Change`, 2},
 		{10, `Change %`, 2},
-		{10, `Open`, 4},
-		{10, `Low`, 4},
-		{10, `High`, 4},
+		{10, `Open`, 2},
+		{10, `Low`, 2},
+		{10, `High`, 2},
 		{10, `Volume`, 2},
 		{15, `Avg Volume`, 2},
 		{10, `P/E`, 2},
 		{10, `Divd %`, 2},
-		{15, `Mkt Cap`, 4},
+		{15, `Mkt Cap`, 3},
 		{15, `PreChg %`, 2},
 		{15, `AfterChg %`, 2},
 	}

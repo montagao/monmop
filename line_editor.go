@@ -1,6 +1,7 @@
 package main
 
 import (
+	"fmt"
 	"regexp"
 	"strings"
 
@@ -75,13 +76,6 @@ func (editor *LineEditor) Done() {
 
 func (editor *LineEditor) Execute(selectedQuote int) (newQuote int) {
 	switch editor.cmd {
-	case 'a':
-		tickers := editor.tokenize()
-		if len(tickers) > 0 {
-			// TODO: do some basic checks on tickers
-			editor.profile.Tickers = append(editor.profile.Tickers, tickers...)
-		}
-		return getTickerId(editor.profile.Tickers, tickers[len(tickers)-1])
 	case 'd':
 		if strings.TrimSpace(strings.ToLower(editor.input)) == "y" {
 			for id := range *editor.quotes {
@@ -99,10 +93,29 @@ func (editor *LineEditor) Execute(selectedQuote int) (newQuote int) {
 			if strings.TrimSpace(strings.ToUpper(editor.input)) == q.Ticker {
 				return id
 			}
-
 		}
+		return -1
+
 	}
 	return selectedQuote
+}
+
+func (editor *LineEditor) PrintSearchError(tickerName string) {
+	fg, bg := termbox.ColorDefault, termbox.ColorDefault
+
+	editor.prompt = fmt.Sprintf("couldn't find specified ticker(s) '%s'", tickerName)
+	editor.commandWin.print(0, 0, fg, bg, editor.prompt)
+}
+
+func (editor *LineEditor) AddQuotes() (ticker string) {
+	tickers := editor.tokenize()
+	if len(tickers) > 0 {
+		// TODO: do some basic validation checks on tickers
+		editor.profile.Tickers = append(editor.profile.Tickers, tickers...)
+	}
+
+	// return the last ticker added so we can select it
+	return tickers[len(tickers)-1]
 }
 
 func removeTicker(s []string, r string) []string {

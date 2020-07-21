@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"io/ioutil"
+	"log"
 	"os"
 	"os/signal"
 	"os/user"
@@ -18,6 +19,8 @@ import (
 const defaultProfile = ".config/monmop/monmoprc"
 
 type mode int
+
+var file *os.File
 
 const (
 	NORMAL mode = iota
@@ -94,19 +97,34 @@ func newApp() *app {
 		panic(err)
 	}
 
+	file, err = os.OpenFile("info.log", os.O_CREATE|os.O_APPEND|os.O_WRONLY, 0644)
+	if err != nil {
+		log.Fatal(err)
+	}
+
+	logger := log.New(file, "DEBUG: ", log.Ldate|log.Ltime|log.Lshortfile)
+
+	logger.Print("I'm loggin in app")
 	profile, err := loadProfile(user)
 	if err != nil {
 		panic(err)
 	}
 
 	mode := NORMAL
-	ui := newUI(profile, &mode)
+	ui := newUI(profile, &mode, logger)
 
 	quitChan := make(chan bool, 1)
 	osChan := make(chan os.Signal, 1)
 	keyQueue := make(chan termbox.Event)
 
-	signal.Notify(osChan, os.Interrupt, syscall.SIGHUP, syscall.SIGTERM)
+	signal.Notify(osChan,
+		os.Interrupt,
+		syscall.SIGHUP,
+		syscall.SIGTERM,
+		syscall.SIGABRT,
+		syscall.SIGINT,
+	)
+
 	go func() {
 		<-osChan
 		// quit on any OS kill/interrupt signal
@@ -139,6 +157,7 @@ func (app *app) loop() {
 		case <-app.quitChan:
 			// TODO: save config on quit
 			fmt.Printf("bye!")
+			file.Close()
 			return // exit app
 		case event := <-app.keyQueue:
 			switch event.Type {

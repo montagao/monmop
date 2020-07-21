@@ -33,8 +33,8 @@ var marketNames = map[string]string{
 
 const (
 	NO_CHAR         string = " "
-	DESCENDING_CHAR string = "🠕"
-	ASCENDING_CHAR  string = "🠗"
+	DESCENDING_CHAR string = "🠗"
+	ASCENDING_CHAR  string = "🠕"
 )
 
 const appTitle = "monmop 0.1"
@@ -102,28 +102,12 @@ type Ui struct {
 	mode       *mode
 	profile    *profile
 	lineEditor *LineEditor
+	logger     *log.Logger
 }
 
-func newUI(profile *profile, mode *mode) *Ui {
+func newUI(profile *profile, mode *mode, logger *log.Logger) *Ui {
 	wtot, htot := termbox.Size()
-
-	eventQ := make(chan termbox.Event)
-	go func() {
-		for {
-			eventQ <- termbox.PollEvent()
-		}
-	}()
-
-	eventChann := make(chan termbox.Event)
-	go func() {
-		for {
-			e := <-eventQ
-			// TODO
-			// handle  alt modifiers?o
-			// there's some more work to be done here.
-			eventChann <- e
-		}
-	}()
+	logger.Print("I'm printing in UI")
 
 	return &Ui{
 		titleWin: &Win{
@@ -175,11 +159,13 @@ func newUI(profile *profile, mode *mode) *Ui {
 				y: htot - 1,
 			},
 		),
+		logger: logger,
 	}
 
 }
 
 func (ui *Ui) Resize() {
+	ui.logger.Print("i'm loggin this resize")
 	wtot, htot := termbox.Size()
 	ui.titleWin.w = wtot
 	ui.marketWin.w = wtot
@@ -192,9 +178,11 @@ func (ui *Ui) Resize() {
 }
 
 func (ui *Ui) Draw() {
-	fg, bg := termbox.ColorDefault, termbox.ColorDefault
+	// fg, bg := termbox.ColorDefault, termbox.ColorDefault
+	ui.logger.Print("drawing...")
+	ui.logger.Printf("zerothQuote :%s ...", (*ui.stockQuotes)[ui.zerothQuote].Ticker)
 
-	termbox.Clear(fg, bg)
+	//termbox.Clear(fg, bg)
 	ui.drawTitleLine()
 	ui.drawMarketWin()
 	ui.drawLabelWin()
@@ -203,22 +191,37 @@ func (ui *Ui) Draw() {
 	termbox.Flush()
 }
 func (ui *Ui) Prompt(cmd rune) {
+	ui.lineEditor.Done() // clear the buffer
 	ui.lineEditor.Prompt(cmd, ui.selectedQuote)
 }
 
 func (ui *Ui) ExecuteCommand() {
 	// execute some command
-	oldQuoteId := ui.lineEditor.Execute(ui.selectedQuote)
-	ui.lineEditor.Done()
-	// if ui.lineEditor.cmd == 'a' {
-	if oldQuoteId >= 0 {
-		ui.selectedQuote = oldQuoteId
-	}
-	ui.GetQuotes()
-	// }
-
-	if oldQuoteId >= 0 {
-		ui.resetSelection((*ui.stockQuotes)[oldQuoteId])
+	ui.logger.Print("executing...")
+	switch ui.lineEditor.cmd {
+	case 'a':
+		tickerName := ui.lineEditor.AddQuotes()
+		ui.GetQuotes()
+		newQ := ui.getQuoteByTicker(tickerName)
+		ui.resetSelection(*newQ)
+		ui.lineEditor.Done()
+	case 'd':
+		oldQuoteId := ui.lineEditor.Execute(ui.selectedQuote)
+		ui.lineEditor.Done()
+		ui.GetQuotes()
+		if oldQuoteId >= 0 {
+			ui.resetSelection((*ui.stockQuotes)[oldQuoteId])
+		}
+		ui.lineEditor.Done()
+	case '/':
+		oldQuoteId := ui.lineEditor.Execute(ui.selectedQuote)
+		tickerName := ui.lineEditor.input
+		ui.lineEditor.Done()
+		if oldQuoteId < 0 {
+			ui.lineEditor.PrintSearchError(tickerName)
+		} else {
+			ui.resetSelection((*ui.stockQuotes)[oldQuoteId])
+		}
 	}
 	ui.Draw()
 }
@@ -261,6 +264,7 @@ func (ui *Ui) NavigateLabel(key rune) {
 }
 
 func (ui *Ui) SortLabel(key rune) {
+	ui.logger.Printf("Sorting label %s", ui.layout.columns[ui.selectedLabel].name)
 	if key == 'j' {
 		ui.sortSymbol = DESCENDING_CHAR
 		ui.sortByLabelDsc()
@@ -326,24 +330,30 @@ func (ui *Ui) sortByLabelAsc() {
 }
 
 func (ui *Ui) resetSelection(oldQ Quote) {
+	ui.logger.Printf("Resetting selection")
 	for id, _ := range *ui.stockQuotes {
 		if (*ui.stockQuotes)[id] == oldQ {
 			if id < ui.zerothQuote {
 				// case if selected quote above current window
+				ui.logger.Printf("reseting stock up")
 				for id < ui.zerothQuote {
 					ui.navigateStockUp()
 				}
 			} else if id >= ui.zerothQuote+ui.stockWin.h {
 				// case if selected quote is below current window
 				// Do nothing.
+				ui.logger.Printf("reseting stock down to oldQ %s", oldQ.Ticker)
 				for id >= ui.zerothQuote+ui.stockWin.h {
+					ui.logger.Printf("id: %d ui.zerothQuote: %d ui.stockWin.h %d", id, ui.zerothQuote, ui.stockWin.h)
 					ui.navigateStockDown()
 				}
 			} else {
+				ui.logger.Printf("reseting stock current")
 				// case if selected quote is exists in current window
 				ui.selectedQuote = id
 				ui.selectedVisibleQuote = ui.selectedQuote - ui.zerothQuote
 			}
+			ui.logger.Printf("selection reset")
 			break
 		}
 	}
@@ -475,11 +485,13 @@ func (ui *Ui) drawStockWin() {
 
 func (ui *Ui) GetQuotes() {
 	var err error
+	ui.logger.Printf("Fetching quotes...")
 	ui.stockQuotes, err = FetchQuotes(ui.profile.Tickers)
 	if err != nil {
 		fmt.Printf("error : %v", err)
 		panic(err)
 	}
+	ui.logger.Printf("Fetched %d stock quotes", len(*ui.stockQuotes))
 
 	ui.marketQuotes, err = FetchMarket()
 
@@ -520,14 +532,18 @@ func (ui *Ui) navigateStockEnd() {
 func (ui *Ui) navigateStockDown() {
 	// navigate down a line in the stock window
 	updatedPos := ui.selectedQuote + 1
+	ui.logger.Printf("navigating stock down, updatedPos :%d", updatedPos)
 	if ui.selectedVisibleQuote+1 < ui.stockWin.h {
 		ui.selectedQuote = updatedPos
 		ui.selectedVisibleQuote += 1
 	} else if ui.selectedVisibleQuote+1 >= ui.stockWin.h && updatedPos < len(*ui.stockQuotes) {
+		ui.logger.Printf("Scrolling window down zerothQuote %d, stockWin.h %d, len(stockQuotes) %d", ui.zerothQuote, ui.stockWin.h, len(*ui.stockQuotes))
+
 		ui.zerothQuote += 1
 		ui.visibleQuotes = (*ui.stockQuotes)[ui.zerothQuote : ui.zerothQuote+ui.stockWin.h]
 		ui.selectedQuote = updatedPos
 	}
+	ui.logger.Printf("selected stock: %s", (*ui.stockQuotes)[ui.selectedQuote].Ticker)
 }
 
 func (ui *Ui) navigateStockUp() {
@@ -541,4 +557,14 @@ func (ui *Ui) navigateStockUp() {
 		ui.selectedQuote = updatedPos
 		ui.visibleQuotes = (*ui.stockQuotes)[ui.zerothQuote : ui.zerothQuote+ui.stockWin.h]
 	}
+	ui.logger.Printf("selected stock: %s", (*ui.stockQuotes)[ui.selectedQuote].Ticker)
+}
+
+func (ui *Ui) getQuoteByTicker(ticker string) *Quote {
+	for id, q := range *ui.stockQuotes {
+		if q.Ticker == ticker {
+			return &(*ui.stockQuotes)[id]
+		}
+	}
+	return nil
 }
