@@ -226,7 +226,7 @@ func (ui *Ui) ExecuteCommand() {
 	ui.Draw()
 }
 
-func (ui *Ui) HandleInputKey(ev termbox.Event) {
+func (ui *Ui) HandleLineEditorInput(ev termbox.Event) {
 	ui.lineEditor.Handle(ev)
 }
 
@@ -250,7 +250,7 @@ func (ui *Ui) OpenInBrowser() {
 	}
 }
 
-func (ui *Ui) NavigateLabel(key rune) {
+func (ui *Ui) HandleSortEvent(key rune) {
 	if key == 'h' || key == 'b' {
 		ui.navigateLabelLeft()
 	} else if key == 'l' || key == 'e' {
@@ -260,11 +260,7 @@ func (ui *Ui) NavigateLabel(key rune) {
 	} else if key == '$' {
 		ui.selectedLabel = len(ui.layout.columns) - 1
 	}
-	ui.Draw()
-}
 
-func (ui *Ui) SortLabel(key rune) {
-	ui.logger.Printf("Sorting label %s", ui.layout.columns[ui.selectedLabel].name)
 	if key == 'j' {
 		ui.sortSymbol = DESCENDING_CHAR
 		ui.sortByLabelDsc()
@@ -511,9 +507,9 @@ func (ui *Ui) GetQuotes() {
 	ui.lineEditor.quotes = ui.stockQuotes
 
 	if ui.sortSymbol == DESCENDING_CHAR {
-		ui.SortLabel('j')
+		ui.HandleSortEvent('j')
 	} else if ui.sortSymbol == ASCENDING_CHAR {
-		ui.SortLabel('k')
+		ui.HandleSortEvent('k')
 	}
 }
 

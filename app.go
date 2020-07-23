@@ -28,6 +28,13 @@ const (
 	SORT
 )
 
+var navBindingKeys = map[termbox.Key]rune{
+	termbox.KeyArrowDown:  'j',
+	termbox.KeyArrowUp:    'k',
+	termbox.KeyArrowLeft:  'h',
+	termbox.KeyArrowRight: 'l',
+}
+
 type app struct {
 	ui       *Ui
 	ticker   *time.Ticker
@@ -172,16 +179,16 @@ func (app *app) loop() {
 						app.ui.lineEditor.Done()
 						*app.mode = NORMAL
 					} else {
-						app.ui.HandleInputKey(event)
+						app.ui.HandleLineEditorInput(event)
 					}
 				case NORMAL:
 					if event.Ch == 'q' || event.Ch == 'Q' {
 						app.saveProfile()
 						return
-					} else if event.Ch == 'j' {
+					} else if event.Ch == 'j' || event.Key == termbox.KeyArrowDown {
 						app.ui.navigateStockDown()
 						app.ui.Draw()
-					} else if event.Ch == 'k' {
+					} else if event.Ch == 'k' || event.Key == termbox.KeyArrowUp {
 						app.ui.navigateStockUp()
 						app.ui.Draw()
 					} else if event.Ch == 'g' {
@@ -216,12 +223,12 @@ func (app *app) loop() {
 					if event.Ch == 'q' || event.Ch == 'Q' {
 						app.saveProfile()
 						return
-					} else if event.Ch == 'h' || event.Ch == 'l' || event.Ch == 'b' || event.Ch == 'e' {
-						app.ui.NavigateLabel(event.Ch)
-					} else if event.Ch == '0' || event.Ch == '$' {
-						app.ui.NavigateLabel(event.Ch)
-					} else if event.Ch == 'j' || event.Ch == 'k' {
-						app.ui.SortLabel(event.Ch)
+					} else if isLabelNavigationEvent(event) {
+						if ch, ok := navBindingKeys[event.Key]; ok {
+							app.ui.HandleSortEvent(ch)
+						} else {
+							app.ui.HandleSortEvent(event.Ch)
+						}
 					} else if event.Key == termbox.KeyEsc {
 						*app.mode = NORMAL
 						app.ui.Draw()
@@ -237,6 +244,12 @@ func (app *app) loop() {
 			app.fetchAndDraw()
 		}
 	}
+}
+func isLabelNavigationEvent(e termbox.Event) bool {
+	if _, ok := navBindingKeys[e.Key]; ok {
+		return true
+	}
+	return e.Ch == 'h' || e.Ch == 'l' || e.Ch == 'b' || e.Ch == 'e' || e.Ch == '0' || e.Ch == '$' || e.Ch == 'j' || e.Ch == 'k'
 }
 
 func (app *app) fetchAndDraw() {
