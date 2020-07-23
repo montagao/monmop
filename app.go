@@ -16,7 +16,7 @@ import (
 )
 
 // TODO: make this more system-wide compatible
-const defaultProfile = ".config/monmop/monmoprc"
+const defaultProfile = ".config/monmop/"
 
 type mode int
 
@@ -54,19 +54,24 @@ func (profile *profile) Save() error {
 	if err != nil {
 		return err
 	}
+	log.Printf("saving to %s", profile.filepath)
 
 	return ioutil.WriteFile(profile.filepath, data, 0644)
 }
 
 func loadProfile(user *user.User) (*profile, error) {
-	// TODO: allow custom profile path? nah.
+	// TODO: allow custom profile path?
 	profile := &profile{}
 
-	// TODO: create dir if doens't exist
 	profilePath := path.Join(user.HomeDir, defaultProfile)
 	profile.filepath = profilePath
 
-	data, err := ioutil.ReadFile(profilePath)
+	if _, err := os.Stat(profile.filepath); os.IsNotExist(err) {
+		os.Mkdir(profile.filepath, 0700)
+	}
+
+	profile.filepath = path.Join(profilePath, "monmoprc")
+	data, err := ioutil.ReadFile(profile.filepath)
 	if err != nil {
 		// set some defaults
 		profile.Tickers = []string{"CASH", "SPLK", "GOOG"}
