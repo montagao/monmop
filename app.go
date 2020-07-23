@@ -84,19 +84,12 @@ func loadProfile(user *user.User) (*profile, error) {
 }
 
 func (app *app) saveProfile() error {
-	user, err := user.Current()
-	if err != nil {
-		return err
-	}
-	profilePath := path.Join(user.HomeDir, defaultProfile)
-
-	var b []byte
-	b, err = json.Marshal(app.profile)
+	b, err := json.Marshal(app.profile)
 	if err != nil {
 		return err
 	}
 
-	err = ioutil.WriteFile(profilePath, b, 0644)
+	err = ioutil.WriteFile(app.profile.filepath, b, 0644)
 	if err != nil {
 		return err
 	}
@@ -170,6 +163,7 @@ func (app *app) loop() {
 			// TODO: save config on quit
 			fmt.Printf("bye!")
 			file.Close()
+			termbox.Close()
 			return // exit app
 		case event := <-app.keyQueue:
 			switch event.Type {
@@ -241,9 +235,7 @@ func (app *app) loop() {
 				}
 
 			case termbox.EventResize:
-				termbox.Clear(termbox.ColorDefault, termbox.ColorDefault)
 				app.ui.Resize()
-				app.ui.Draw()
 			}
 		case <-app.ticker.C:
 			app.fetchAndDraw()

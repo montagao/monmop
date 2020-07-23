@@ -29,6 +29,7 @@ var marketNames = map[string]string{
 	"RMB=F":    "RMB",
 	"CL=F":     "Oil",
 	"GC=F":     "Gold",
+	"BTC-USD":  "Bitcoin",
 }
 
 const (
@@ -165,8 +166,11 @@ func newUI(profile *profile, mode *mode, logger *log.Logger) *Ui {
 }
 
 func (ui *Ui) Resize() {
+	fg, bg := termbox.ColorDefault, termbox.ColorDefault
 	ui.logger.Print("i'm loggin this resize")
+	termbox.Clear(fg, bg)
 	wtot, htot := termbox.Size()
+	ui.logger.Printf("new size: %dx%d", wtot, htot)
 	ui.titleWin.w = wtot
 	ui.marketWin.w = wtot
 	ui.labelWin.w = wtot
@@ -175,6 +179,15 @@ func (ui *Ui) Resize() {
 	ui.commandWin.w = wtot
 	ui.commandWin.y = htot - 1
 	ui.maxQuotesHeight = htot - 7
+
+	ui.logger.Printf("len visible quotes %d, ui.maxQuotesHeight %d", len(ui.visibleQuotes), ui.maxQuotesHeight)
+	if len(ui.visibleQuotes) > ui.maxQuotesHeight {
+		ui.logger.Print("resizing visible quotes...")
+		ui.visibleQuotes = ui.visibleQuotes[:ui.maxQuotesHeight]
+	}
+
+	ui.clearStockWin()
+	ui.Draw()
 }
 
 func (ui *Ui) Draw() {
@@ -213,6 +226,7 @@ func (ui *Ui) ExecuteCommand() {
 			ui.resetSelection((*ui.stockQuotes)[oldQuoteId])
 		}
 		ui.lineEditor.Done()
+		ui.clearStockWin()
 	case '/':
 		oldQuoteId := ui.lineEditor.Execute(ui.selectedQuote)
 		tickerName := ui.lineEditor.input
@@ -479,6 +493,13 @@ func (ui *Ui) drawStockWin() {
 	}
 }
 
+func (ui *Ui) clearStockWin() {
+	fg, bg := termbox.ColorDefault, termbox.ColorDefault
+	for i := 0; i < ui.stockWin.h; i++ {
+		ui.stockWin.print(0, i, fg, bg, fmt.Sprintf("%*v", ui.stockWin.w, ""))
+	}
+}
+
 func (ui *Ui) GetQuotes() {
 	var err error
 	ui.logger.Printf("Fetching quotes...")
@@ -528,11 +549,15 @@ func (ui *Ui) navigateStockEnd() {
 func (ui *Ui) navigateStockDown() {
 	// navigate down a line in the stock window
 	updatedPos := ui.selectedQuote + 1
+	if updatedPos >= len(*ui.stockQuotes) {
+		return
+	}
+
 	ui.logger.Printf("navigating stock down, updatedPos :%d", updatedPos)
 	if ui.selectedVisibleQuote+1 < ui.stockWin.h {
 		ui.selectedQuote = updatedPos
 		ui.selectedVisibleQuote += 1
-	} else if ui.selectedVisibleQuote+1 >= ui.stockWin.h && updatedPos < len(*ui.stockQuotes) {
+	} else if ui.selectedVisibleQuote+1 >= ui.stockWin.h {
 		ui.logger.Printf("Scrolling window down zerothQuote %d, stockWin.h %d, len(stockQuotes) %d", ui.zerothQuote, ui.stockWin.h, len(*ui.stockQuotes))
 
 		ui.zerothQuote += 1

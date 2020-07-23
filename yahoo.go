@@ -27,6 +27,7 @@ var marketTickers = []string{
 	"RMB=F",    // RMB
 	"CL=F",     // Oil
 	"GC=F",     // Gold
+	"BTC-USD",  // Bitcoin
 }
 
 // Ticker stores quote information for the particular ticker. The data
