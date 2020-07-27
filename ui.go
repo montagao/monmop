@@ -193,7 +193,7 @@ func (ui *Ui) Resize() {
 func (ui *Ui) Draw() {
 	// fg, bg := termbox.ColorDefault, termbox.ColorDefault
 	ui.logger.Print("drawing...")
-	ui.logger.Printf("zerothQuote :%s ...", (*ui.stockQuotes)[ui.zerothQuote].Ticker)
+	// ui.logger.Printf("zerothQuote :%s ...", (*ui.stockQuotes)[ui.zerothQuote].Ticker)
 
 	//termbox.Clear(fg, bg)
 	ui.drawTitleLine()
@@ -208,9 +208,7 @@ func (ui *Ui) Prompt(cmd rune) {
 	ui.lineEditor.Prompt(cmd, ui.selectedQuote)
 }
 
-func (ui *Ui) ExecuteCommand() {
-	// execute some command
-	ui.logger.Print("executing...")
+func (ui *Ui) ExecuteCommand() { // execute some command ui.logger.Print("executing...")
 	switch ui.lineEditor.cmd {
 	case 'a':
 		tickerName := ui.lineEditor.AddQuotes()
@@ -221,12 +219,12 @@ func (ui *Ui) ExecuteCommand() {
 	case 'd':
 		oldQuoteId := ui.lineEditor.Execute(ui.selectedQuote)
 		ui.lineEditor.Done()
+		ui.clearStockWin()
 		ui.GetQuotes()
 		if oldQuoteId >= 0 {
 			ui.resetSelection((*ui.stockQuotes)[oldQuoteId])
 		}
 		ui.lineEditor.Done()
-		ui.clearStockWin()
 	case '/':
 		oldQuoteId := ui.lineEditor.Execute(ui.selectedQuote)
 		tickerName := ui.lineEditor.input
@@ -519,12 +517,11 @@ func (ui *Ui) GetQuotes() {
 	// bad practice? idc
 	if len(*ui.stockQuotes) > ui.maxQuotesHeight {
 		ui.stockWin.h = ui.maxQuotesHeight
-		ui.visibleQuotes = (*ui.stockQuotes)[ui.zerothQuote : ui.zerothQuote+ui.maxQuotesHeight]
 	} else {
 		ui.stockWin.h = len(*ui.stockQuotes)
-		// TODO: bug when deleting last quote?
-		ui.visibleQuotes = *ui.stockQuotes
 	}
+
+	ui.visibleQuotes = (*ui.stockQuotes)[ui.zerothQuote : ui.zerothQuote+ui.stockWin.h]
 	ui.lineEditor.quotes = ui.stockQuotes
 
 	if ui.sortSymbol == DESCENDING_CHAR {
@@ -549,7 +546,7 @@ func (ui *Ui) navigateStockEnd() {
 func (ui *Ui) navigateStockDown() {
 	// navigate down a line in the stock window
 	updatedPos := ui.selectedQuote + 1
-	if updatedPos >= len(*ui.stockQuotes) {
+	if updatedPos >= len(*ui.stockQuotes) || len(*ui.stockQuotes) == 0 {
 		return
 	}
 
@@ -570,6 +567,10 @@ func (ui *Ui) navigateStockDown() {
 func (ui *Ui) navigateStockUp() {
 	// navigate up a line in the stock window
 	updatedPos := ui.selectedQuote - 1
+	if updatedPos < 0 || len(*ui.stockQuotes) == 0 {
+		return
+	}
+
 	if ui.selectedVisibleQuote-1 >= 0 {
 		ui.selectedQuote = updatedPos
 		ui.selectedVisibleQuote -= 1
