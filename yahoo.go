@@ -51,8 +51,9 @@ type Quote struct {
 	MarketCap float64 `json:"marketCap"` // j3: market cap real time.
 	// MarketCapX float64 `json:"marketCap"`                   // j1: market cap (fallback when real time is N/A).
 	// Currency   string  `json:"currency"`                    // String code for currency of stock.
-	PreOpen    float64 `json:"preMarketChangePercent,omitempty"`
-	AfterHours float64 `json:"postMarketChangePercent,omitempty"`
+	Earnings   json.Number `json:"earningsTimestamp"`
+	PreOpen    float64     `json:"preMarketChangePercent,omitempty"`
+	AfterHours float64     `json:"postMarketChangePercent,omitempty"`
 }
 
 func FetchMarket() (*[]Quote, error) {

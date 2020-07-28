@@ -1,12 +1,14 @@
 package main
 
 import (
+	"encoding/json"
 	"fmt"
 	"log"
 	"os/exec"
 	"reflect"
 	"runtime"
 	"sort"
+	"strconv"
 	"strings"
 	"time"
 	"unicode/utf8"
@@ -36,6 +38,9 @@ const (
 	NO_CHAR         string = " "
 	DESCENDING_CHAR string = "🠗"
 	ASCENDING_CHAR  string = "🠕"
+)
+const (
+	layoutUS = "01/02/2006"
 )
 
 const appTitle = "monmop 0.1"
@@ -180,13 +185,20 @@ func (ui *Ui) Resize() {
 	ui.commandWin.y = htot - 1
 	ui.maxQuotesHeight = htot - 7
 
+	if ui.maxQuotesHeight < 0 {
+		ui.maxQuotesHeight = 0
+	}
+
 	ui.logger.Printf("len visible quotes %d, ui.maxQuotesHeight %d", len(ui.visibleQuotes), ui.maxQuotesHeight)
 	if len(ui.visibleQuotes) > ui.maxQuotesHeight {
 		ui.logger.Print("resizing visible quotes...")
 		ui.visibleQuotes = ui.visibleQuotes[:ui.maxQuotesHeight]
 	}
 
-	ui.clearStockWin()
+	ui.titleWin.Clear()
+	ui.stockWin.Clear()
+	ui.labelWin.Clear()
+	ui.commandWin.Clear()
 	ui.Draw()
 }
 
@@ -219,7 +231,7 @@ func (ui *Ui) ExecuteCommand() { // execute some command ui.logger.Print("execut
 	case 'd':
 		oldQuoteId := ui.lineEditor.Execute(ui.selectedQuote)
 		ui.lineEditor.Done()
-		ui.clearStockWin()
+		ui.stockWin.Clear()
 		ui.GetQuotes()
 		if oldQuoteId >= 0 {
 			ui.resetSelection((*ui.stockQuotes)[oldQuoteId])
@@ -302,10 +314,14 @@ func (ui *Ui) sortByLabelDsc() {
 		q := reflect.ValueOf((*ui.stockQuotes)[i]).Field(ui.selectedLabel).Interface()
 		r := reflect.ValueOf((*ui.stockQuotes)[j]).Field(ui.selectedLabel).Interface()
 		f1, isFloat := q.(float64)
+		j1, isJsonNumber := q.(json.Number)
 
 		if isFloat {
 			f2, _ := r.(float64)
 			return f1 > f2
+		} else if isJsonNumber {
+			j2, _ := r.(json.Number)
+			return j1 > j2
 		} else {
 			str, _ := q.(string)
 			str2, _ := r.(string)
@@ -323,10 +339,14 @@ func (ui *Ui) sortByLabelAsc() {
 		q := reflect.ValueOf((*ui.stockQuotes)[i]).Field(ui.selectedLabel).Interface()
 		r := reflect.ValueOf((*ui.stockQuotes)[j]).Field(ui.selectedLabel).Interface()
 		f1, isFloat := q.(float64)
+		j1, isJsonNumber := q.(json.Number)
 
 		if isFloat {
 			f2, _ := r.(float64)
 			return f1 < f2
+		} else if isJsonNumber {
+			j2, _ := r.(json.Number)
+			return j1 < j2
 		} else {
 			str, _ := q.(string)
 			str2, _ := r.(string)
@@ -424,6 +444,9 @@ func (ui *Ui) drawMarketWin() {
 			y++
 			x = 0
 		}
+		if y >= ui.marketWin.h-1 {
+			break
+		}
 		indexLabel := fmt.Sprintf("%s ", marketNames[q.Ticker])
 		ui.marketWin.print(x, y, termbox.ColorYellow, bg, indexLabel)
 		x += len(indexLabel)
@@ -482,19 +505,25 @@ func (ui *Ui) drawStockWin() {
 				} else {
 					tickerLine = tickerLine + fmt.Sprintf("%-*v", ui.layout.columns[i].width, humanFormatted)
 				}
+			} else if strings.Contains(ui.layout.columns[i].name, "Earnings") {
+				earningsTs := string(fieldVal.(json.Number))
+				earningsTsInt, err := strconv.ParseInt(earningsTs, 10, 64)
+				earningsStr := "-"
+
+				if err == nil {
+					tm := time.Unix(earningsTsInt, 0)
+					earningsStr = tm.Format(layoutUS)
+
+				}
+
+				tickerLine = tickerLine + fmt.Sprintf("%-*v", ui.layout.columns[i].width, earningsStr)
+
 			} else {
-				tickerLine = tickerLine + fmt.Sprintf("%-*v", ui.layout.columns[i].width, v.Field(i).Interface())
+				tickerLine = tickerLine + fmt.Sprintf("%-*v", ui.layout.columns[i].width, fieldVal)
 			}
 		}
 
 		ui.stockWin.print(0, id, lineColor, highlightColor, tickerLine)
-	}
-}
-
-func (ui *Ui) clearStockWin() {
-	fg, bg := termbox.ColorDefault, termbox.ColorDefault
-	for i := 0; i < ui.stockWin.h; i++ {
-		ui.stockWin.print(0, i, fg, bg, fmt.Sprintf("%*v", ui.stockWin.w, ""))
 	}
 }
 
