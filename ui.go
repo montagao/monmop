@@ -43,9 +43,15 @@ const (
 	layoutUS = "01/02/2006"
 )
 
-const appTitle = "monmop 0.1"
+const appTitle = "monmop 0.5"
 
-// win
+const (
+	titleWinHeight   int = 1
+	marketWinHeight  int = 4
+	labelWinHeight   int = 1
+	commandWinHeight int = 1
+)
+
 type Win struct {
 	w, h, x, y int
 }
@@ -116,31 +122,31 @@ func newUI(profile *profile, mode *mode) *Ui {
 	return &Ui{
 		titleWin: &Win{
 			w: wtot,
-			h: 1,
+			h: titleWinHeight,
 			x: 0,
 			y: 0,
 		},
 		marketWin: &Win{
 			w: wtot,
-			h: 4,
+			h: marketWinHeight,
 			x: 0,
 			y: 1,
 		},
 		labelWin: &Win{
 			w: wtot,
-			h: 1,
+			h: labelWinHeight,
 			x: 0,
-			y: 5,
+			y: titleWinHeight + marketWinHeight,
 		},
 		stockWin: &Win{
 			w: wtot,
-			h: htot - 7, //terrible practice, but idc
+			h: htot - (titleWinHeight + marketWinHeight + labelWinHeight + commandWinHeight),
 			x: 0,
 			y: 6,
 		},
 		commandWin: &Win{
 			w: wtot,
-			h: 1,
+			h: commandWinHeight,
 			x: 0,
 			y: htot - 1,
 		},
@@ -169,42 +175,30 @@ func newUI(profile *profile, mode *mode) *Ui {
 
 func (ui *Ui) Resize() {
 	fg, bg := termbox.ColorDefault, termbox.ColorDefault
-	// ui.logger.Print("i'm loggin this resize")
 	termbox.Clear(fg, bg)
 	wtot, htot := termbox.Size()
-	// ui.logger.Printf("new size: %dx%d", wtot, htot)
 	ui.titleWin.w = wtot
 	ui.marketWin.w = wtot
 	ui.labelWin.w = wtot
 	ui.stockWin.w = wtot
-	ui.stockWin.h = htot - 7
+	ui.stockWin.h = htot - (ui.titleWin.h + ui.marketWin.h + ui.commandWin.h + ui.labelWin.h)
 	ui.commandWin.w = wtot
 	ui.commandWin.y = htot - 1
-	ui.maxQuotesHeight = htot - 7
+	ui.maxQuotesHeight = htot - (ui.titleWin.h + ui.marketWin.h + ui.commandWin.h + ui.labelWin.h)
 
 	if ui.maxQuotesHeight < 0 {
 		ui.maxQuotesHeight = 0
 	}
 
-	// ui.logger.Printf("len visible quotes %d, ui.maxQuotesHeight %d", len(ui.visibleQuotes), ui.maxQuotesHeight)
 	if len(ui.visibleQuotes) > ui.maxQuotesHeight {
-		// ui.logger.Print("resizing visible quotes...")
 		ui.visibleQuotes = ui.visibleQuotes[:ui.maxQuotesHeight]
 	}
 
-	ui.titleWin.Clear()
-	ui.stockWin.Clear()
-	ui.labelWin.Clear()
-	ui.commandWin.Clear()
+	ui.Clear()
 	ui.Draw()
 }
 
 func (ui *Ui) Draw() {
-	// fg, bg := termbox.ColorDefault, termbox.ColorDefault
-	// ui.logger.Print("drawing...")
-	// ui.logger.Printf("zerothQuote :%s ...", (*ui.stockQuotes)[ui.zerothQuote].Ticker)
-
-	//termbox.Clear(fg, bg)
 	ui.drawTitleLine()
 	ui.drawMarketWin()
 	ui.drawLabelWin()
@@ -212,12 +206,20 @@ func (ui *Ui) Draw() {
 
 	termbox.Flush()
 }
+
+func (ui *Ui) Clear() {
+	ui.titleWin.Clear()
+	ui.stockWin.Clear()
+	ui.labelWin.Clear()
+	ui.commandWin.Clear()
+}
+
 func (ui *Ui) Prompt(cmd rune) {
 	ui.lineEditor.Done() // clear the buffer
 	ui.lineEditor.Prompt(cmd, ui.selectedQuote)
 }
 
-func (ui *Ui) ExecuteCommand() { // execute some command ui.logger.Print("executing...")
+func (ui *Ui) ExecuteCommand() {
 	switch ui.lineEditor.cmd {
 	case 'a':
 		tickerName := ui.lineEditor.AddQuotes()
@@ -241,15 +243,15 @@ func (ui *Ui) ExecuteCommand() { // execute some command ui.logger.Print("execut
 		tickerName := ui.lineEditor.input
 		ui.lineEditor.Done()
 		if oldQuoteId < 0 {
-			ui.lineEditor.PrintSearchError(tickerName)
+			ui.lineEditor.Printf("couldn't find specified ticker(s): %s ", tickerName)
 		} else {
 			ui.updateSelection((*ui.stockQuotes)[oldQuoteId])
 		}
 	case ':':
 		ui.lineEditor.Execute(ui.selectedQuote)
 		ui.stockWin.Clear()
-		ui.GetQuotes()
 		ui.resetSelection()
+		ui.GetQuotes()
 	}
 	ui.Draw()
 }
@@ -394,13 +396,13 @@ func (ui *Ui) updateSelection(newQ Quote) {
 }
 
 func (ui *Ui) resetSelection() {
+	// must be called in conjunction with GetQuotes()
 	if len(*ui.stockQuotes) == 0 {
 		return
 	}
 	ui.zerothQuote = 0
 	ui.selectedVisibleQuote = 0
 	ui.selectedQuote = 0
-	ui.visibleQuotes = (*ui.stockQuotes)[ui.zerothQuote : ui.zerothQuote+ui.stockWin.h]
 }
 
 func (ui *Ui) getSortedTickers(quotes []Quote) []string {
@@ -476,7 +478,6 @@ func (ui *Ui) drawMarketWin() {
 func (ui *Ui) drawStockWin() {
 	_, bg := termbox.ColorDefault, termbox.ColorDefault
 
-	// TODO: don't do this. use a struct with properties, or some constants.
 	for id, q := range ui.visibleQuotes {
 		tickerLine := ""
 		highlightColor := bg
@@ -514,7 +515,9 @@ func (ui *Ui) drawStockWin() {
 					val = val * 100
 				}
 				humanFormatted := float2Str(val, ui.layout.columns[i].precision)
-				if (strings.Contains(ui.layout.columns[i].name, "Change") || strings.Contains(ui.layout.columns[i].name, "After") || strings.Contains(ui.layout.columns[i].name, "Pre")) && val >= 0 {
+				if (strings.Contains(ui.layout.columns[i].name, "Change") ||
+					strings.Contains(ui.layout.columns[i].name, "After") ||
+					strings.Contains(ui.layout.columns[i].name, "Pre")) && val >= 0 {
 					// TODO: just add an "advancing" field in Quote
 					humanFormatted = "+" + humanFormatted
 					tickerLine = tickerLine + fmt.Sprintf("%-*v", ui.layout.columns[i].width, humanFormatted)
@@ -529,7 +532,6 @@ func (ui *Ui) drawStockWin() {
 				if err == nil {
 					tm := time.Unix(earningsTsInt, 0)
 					earningsStr = tm.Format(layoutUS)
-
 				}
 
 				tickerLine = tickerLine + fmt.Sprintf("%-*v", ui.layout.columns[i].width, earningsStr)
@@ -556,8 +558,6 @@ func (ui *Ui) GetQuotes() {
 	if err != nil {
 		panic(err)
 	}
-	// update stock window size to make life easier for us
-	// bad practice? idc
 	if len(*ui.stockQuotes) > ui.maxQuotesHeight {
 		ui.stockWin.h = ui.maxQuotesHeight
 	} else {
@@ -587,7 +587,6 @@ func (ui *Ui) navigateStockEnd() {
 }
 
 func (ui *Ui) navigateStockDown() {
-	// navigate down a line in the stock window
 	updatedPos := ui.selectedQuote + 1
 	if updatedPos >= len(*ui.stockQuotes) || len(*ui.stockQuotes) == 0 {
 		return
@@ -604,7 +603,6 @@ func (ui *Ui) navigateStockDown() {
 }
 
 func (ui *Ui) navigateStockUp() {
-	// navigate up a line in the stock window
 	updatedPos := ui.selectedQuote - 1
 	if updatedPos < 0 || len(*ui.stockQuotes) == 0 {
 		return

@@ -16,5 +16,4 @@ func main() {
 	app := newApp()
 
 	app.loop()
-
 }

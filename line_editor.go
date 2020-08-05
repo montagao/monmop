@@ -114,7 +114,7 @@ func (editor *LineEditor) Execute(selectedQuote int) (newQuote int) {
 			portfolioName := args[1]
 			portfolio, ok := editor.profile.Portfolios[portfolioName]
 			if !ok {
-				editor.PrintPortfolioNotFound(portfolioName)
+				editor.Printf("portfolio not found: %s", portfolioName)
 				return -1
 			} else {
 				editor.profile.Tickers = append([]string{}, portfolio.Tickers...)
@@ -138,25 +138,9 @@ func (editor *LineEditor) Execute(selectedQuote int) (newQuote int) {
 	return 0
 }
 
-// TODO: refactor error printing
-func (editor *LineEditor) PrintSearchError(tickerName string) {
+func (editor *LineEditor) Printf(format string, a ...interface{}) {
 	fg, bg := termbox.ColorDefault, termbox.ColorDefault
-
-	editor.prompt = fmt.Sprintf("couldn't find specified ticker(s) '%s'", tickerName)
-	editor.commandWin.print(0, 0, fg, bg, editor.prompt)
-}
-
-func (editor *LineEditor) PrintNotEnoughArgs() {
-	fg, bg := termbox.ColorDefault, termbox.ColorDefault
-
-	editor.prompt = fmt.Sprintf("not enough arguments")
-	editor.commandWin.print(0, 0, fg, bg, editor.prompt)
-}
-
-func (editor *LineEditor) PrintPortfolioNotFound(pname string) {
-	fg, bg := termbox.ColorDefault, termbox.ColorDefault
-
-	editor.prompt = fmt.Sprintf("portfolio %s not found", pname)
+	editor.prompt = fmt.Sprintf(format, a...)
 	editor.commandWin.print(0, 0, fg, bg, editor.prompt)
 }
 

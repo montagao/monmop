@@ -168,7 +168,6 @@ func (app *app) loop() {
 	for {
 		select {
 		case <-app.quitChan:
-			// TODO: save config on quit
 			app.saveProfile()
 			return // exit app
 		case event := <-app.keyQueue:
