@@ -43,9 +43,15 @@ const (
 	layoutUS = "01/02/2006"
 )
 
-const appTitle = "monmop 0.1"
+const appTitle = "monmop 0.5"
 
-// win
+const (
+	titleWinHeight   int = 1
+	marketWinHeight  int = 4
+	labelWinHeight   int = 1
+	commandWinHeight int = 1
+)
+
 type Win struct {
 	w, h, x, y int
 }
@@ -108,41 +114,39 @@ type Ui struct {
 	mode       *mode
 	profile    *profile
 	lineEditor *LineEditor
-	logger     *log.Logger
 }
 
-func newUI(profile *profile, mode *mode, logger *log.Logger) *Ui {
+func newUI(profile *profile, mode *mode) *Ui {
 	wtot, htot := termbox.Size()
-	logger.Print("I'm printing in UI")
 
 	return &Ui{
 		titleWin: &Win{
 			w: wtot,
-			h: 1,
+			h: titleWinHeight,
 			x: 0,
 			y: 0,
 		},
 		marketWin: &Win{
 			w: wtot,
-			h: 4,
+			h: marketWinHeight,
 			x: 0,
 			y: 1,
 		},
 		labelWin: &Win{
 			w: wtot,
-			h: 1,
+			h: labelWinHeight,
 			x: 0,
-			y: 5,
+			y: titleWinHeight + marketWinHeight,
 		},
 		stockWin: &Win{
 			w: wtot,
-			h: htot - 7, //terrible practice, but idc
+			h: htot - (titleWinHeight + marketWinHeight + labelWinHeight + commandWinHeight),
 			x: 0,
 			y: 6,
 		},
 		commandWin: &Win{
 			w: wtot,
-			h: 1,
+			h: commandWinHeight,
 			x: 0,
 			y: htot - 1,
 		},
@@ -165,49 +169,36 @@ func newUI(profile *profile, mode *mode, logger *log.Logger) *Ui {
 				y: htot - 1,
 			},
 		),
-		logger: logger,
 	}
 
 }
 
 func (ui *Ui) Resize() {
 	fg, bg := termbox.ColorDefault, termbox.ColorDefault
-	ui.logger.Print("i'm loggin this resize")
 	termbox.Clear(fg, bg)
 	wtot, htot := termbox.Size()
-	ui.logger.Printf("new size: %dx%d", wtot, htot)
 	ui.titleWin.w = wtot
 	ui.marketWin.w = wtot
 	ui.labelWin.w = wtot
 	ui.stockWin.w = wtot
-	ui.stockWin.h = htot - 7
+	ui.stockWin.h = htot - (ui.titleWin.h + ui.marketWin.h + ui.commandWin.h + ui.labelWin.h)
 	ui.commandWin.w = wtot
 	ui.commandWin.y = htot - 1
-	ui.maxQuotesHeight = htot - 7
+	ui.maxQuotesHeight = htot - (ui.titleWin.h + ui.marketWin.h + ui.commandWin.h + ui.labelWin.h)
 
 	if ui.maxQuotesHeight < 0 {
 		ui.maxQuotesHeight = 0
 	}
 
-	ui.logger.Printf("len visible quotes %d, ui.maxQuotesHeight %d", len(ui.visibleQuotes), ui.maxQuotesHeight)
 	if len(ui.visibleQuotes) > ui.maxQuotesHeight {
-		ui.logger.Print("resizing visible quotes...")
 		ui.visibleQuotes = ui.visibleQuotes[:ui.maxQuotesHeight]
 	}
 
-	ui.titleWin.Clear()
-	ui.stockWin.Clear()
-	ui.labelWin.Clear()
-	ui.commandWin.Clear()
+	ui.Clear()
 	ui.Draw()
 }
 
 func (ui *Ui) Draw() {
-	// fg, bg := termbox.ColorDefault, termbox.ColorDefault
-	ui.logger.Print("drawing...")
-	// ui.logger.Printf("zerothQuote :%s ...", (*ui.stockQuotes)[ui.zerothQuote].Ticker)
-
-	//termbox.Clear(fg, bg)
 	ui.drawTitleLine()
 	ui.drawMarketWin()
 	ui.drawLabelWin()
@@ -215,18 +206,28 @@ func (ui *Ui) Draw() {
 
 	termbox.Flush()
 }
+
+func (ui *Ui) Clear() {
+	ui.titleWin.Clear()
+	ui.stockWin.Clear()
+	ui.labelWin.Clear()
+	ui.commandWin.Clear()
+}
+
 func (ui *Ui) Prompt(cmd rune) {
 	ui.lineEditor.Done() // clear the buffer
 	ui.lineEditor.Prompt(cmd, ui.selectedQuote)
 }
 
-func (ui *Ui) ExecuteCommand() { // execute some command ui.logger.Print("executing...")
+func (ui *Ui) ExecuteCommand() {
 	switch ui.lineEditor.cmd {
 	case 'a':
 		tickerName := ui.lineEditor.AddQuotes()
 		ui.GetQuotes()
 		newQ := ui.getQuoteByTicker(tickerName)
-		ui.resetSelection(*newQ)
+		if newQ != nil {
+			ui.updateSelection(*newQ)
+		}
 		ui.lineEditor.Done()
 	case 'd':
 		oldQuoteId := ui.lineEditor.Execute(ui.selectedQuote)
@@ -234,7 +235,7 @@ func (ui *Ui) ExecuteCommand() { // execute some command ui.logger.Print("execut
 		ui.stockWin.Clear()
 		ui.GetQuotes()
 		if oldQuoteId >= 0 {
-			ui.resetSelection((*ui.stockQuotes)[oldQuoteId])
+			ui.updateSelection((*ui.stockQuotes)[oldQuoteId])
 		}
 		ui.lineEditor.Done()
 	case '/':
@@ -242,10 +243,15 @@ func (ui *Ui) ExecuteCommand() { // execute some command ui.logger.Print("execut
 		tickerName := ui.lineEditor.input
 		ui.lineEditor.Done()
 		if oldQuoteId < 0 {
-			ui.lineEditor.PrintSearchError(tickerName)
+			ui.lineEditor.Printf("couldn't find specified ticker(s): %s ", tickerName)
 		} else {
-			ui.resetSelection((*ui.stockQuotes)[oldQuoteId])
+			ui.updateSelection((*ui.stockQuotes)[oldQuoteId])
 		}
+	case ':':
+		ui.lineEditor.Execute(ui.selectedQuote)
+		ui.stockWin.Clear()
+		ui.resetSelection()
+		ui.GetQuotes()
 	}
 	ui.Draw()
 }
@@ -257,7 +263,7 @@ func (ui *Ui) HandleLineEditorInput(ev termbox.Event) {
 func (ui *Ui) OpenInBrowser() {
 	var err error
 	q := (*ui.stockQuotes)[ui.selectedQuote]
-	url := "https://wallmine.com/" + q.Ticker
+	url := "https://finance.yahoo.com/quote/" + q.Ticker
 
 	switch runtime.GOOS {
 	case "linux":
@@ -308,6 +314,10 @@ func (ui *Ui) navigateLabelRight() {
 }
 
 func (ui *Ui) sortByLabelDsc() {
+	if len(*ui.stockQuotes) == 0 {
+		return
+	}
+
 	oldQ := (*ui.stockQuotes)[ui.selectedQuote]
 
 	sort.SliceStable(*ui.stockQuotes, func(i, j int) bool {
@@ -329,11 +339,15 @@ func (ui *Ui) sortByLabelDsc() {
 		}
 	})
 	ui.profile.Tickers = ui.getSortedTickers(*ui.stockQuotes)
-	ui.resetSelection(oldQ)
+	ui.updateSelection(oldQ)
 
 }
 
 func (ui *Ui) sortByLabelAsc() {
+	if len(*ui.stockQuotes) == 0 {
+		return
+	}
+
 	oldQ := (*ui.stockQuotes)[ui.selectedQuote]
 	sort.SliceStable(*ui.stockQuotes, func(i, j int) bool {
 		q := reflect.ValueOf((*ui.stockQuotes)[i]).Field(ui.selectedLabel).Interface()
@@ -354,37 +368,41 @@ func (ui *Ui) sortByLabelAsc() {
 		}
 	})
 	ui.profile.Tickers = ui.getSortedTickers(*ui.stockQuotes)
-	ui.resetSelection(oldQ)
+	ui.updateSelection(oldQ)
 }
 
-func (ui *Ui) resetSelection(oldQ Quote) {
-	ui.logger.Printf("Resetting selection")
-	for id, _ := range *ui.stockQuotes {
-		if (*ui.stockQuotes)[id] == oldQ {
+func (ui *Ui) updateSelection(newQ Quote) {
+	for id := range *ui.stockQuotes {
+		if (*ui.stockQuotes)[id] == newQ {
 			if id < ui.zerothQuote {
 				// case if selected quote above current window
-				ui.logger.Printf("reseting stock up")
 				for id < ui.zerothQuote {
 					ui.navigateStockUp()
 				}
 			} else if id >= ui.zerothQuote+ui.stockWin.h {
 				// case if selected quote is below current window
 				// Do nothing.
-				ui.logger.Printf("reseting stock down to oldQ %s", oldQ.Ticker)
 				for id >= ui.zerothQuote+ui.stockWin.h {
-					ui.logger.Printf("id: %d ui.zerothQuote: %d ui.stockWin.h %d", id, ui.zerothQuote, ui.stockWin.h)
 					ui.navigateStockDown()
 				}
 			} else {
-				ui.logger.Printf("reseting stock current")
 				// case if selected quote is exists in current window
 				ui.selectedQuote = id
 				ui.selectedVisibleQuote = ui.selectedQuote - ui.zerothQuote
 			}
-			ui.logger.Printf("selection reset")
 			break
 		}
 	}
+}
+
+func (ui *Ui) resetSelection() {
+	// must be called in conjunction with GetQuotes()
+	if len(*ui.stockQuotes) == 0 {
+		return
+	}
+	ui.zerothQuote = 0
+	ui.selectedVisibleQuote = 0
+	ui.selectedQuote = 0
 }
 
 func (ui *Ui) getSortedTickers(quotes []Quote) []string {
@@ -439,7 +457,7 @@ func (ui *Ui) drawMarketWin() {
 	y := 0
 	for _, q := range *ui.marketQuotes {
 		humanFormatted := float2Str(q.LastTrade, 2)
-		tickerLine := fmt.Sprintf("%s ", marketNames[q.Ticker], humanFormatted, q.ChangePct)
+		tickerLine := fmt.Sprintf("%s %s %.2f", marketNames[q.Ticker], humanFormatted, q.ChangePct)
 		if x+len(tickerLine) > ui.marketWin.w {
 			y++
 			x = 0
@@ -460,7 +478,6 @@ func (ui *Ui) drawMarketWin() {
 func (ui *Ui) drawStockWin() {
 	_, bg := termbox.ColorDefault, termbox.ColorDefault
 
-	// TODO: don't do this. use a struct with properties, or some constants.
 	for id, q := range ui.visibleQuotes {
 		tickerLine := ""
 		highlightColor := bg
@@ -498,7 +515,9 @@ func (ui *Ui) drawStockWin() {
 					val = val * 100
 				}
 				humanFormatted := float2Str(val, ui.layout.columns[i].precision)
-				if (strings.Contains(ui.layout.columns[i].name, "Change") || strings.Contains(ui.layout.columns[i].name, "After") || strings.Contains(ui.layout.columns[i].name, "Pre")) && val >= 0 {
+				if (strings.Contains(ui.layout.columns[i].name, "Change") ||
+					strings.Contains(ui.layout.columns[i].name, "After") ||
+					strings.Contains(ui.layout.columns[i].name, "Pre")) && val >= 0 {
 					// TODO: just add an "advancing" field in Quote
 					humanFormatted = "+" + humanFormatted
 					tickerLine = tickerLine + fmt.Sprintf("%-*v", ui.layout.columns[i].width, humanFormatted)
@@ -513,7 +532,6 @@ func (ui *Ui) drawStockWin() {
 				if err == nil {
 					tm := time.Unix(earningsTsInt, 0)
 					earningsStr = tm.Format(layoutUS)
-
 				}
 
 				tickerLine = tickerLine + fmt.Sprintf("%-*v", ui.layout.columns[i].width, earningsStr)
@@ -529,21 +547,17 @@ func (ui *Ui) drawStockWin() {
 
 func (ui *Ui) GetQuotes() {
 	var err error
-	ui.logger.Printf("Fetching quotes...")
 	ui.stockQuotes, err = FetchQuotes(ui.profile.Tickers)
 	if err != nil {
 		fmt.Printf("error : %v", err)
 		panic(err)
 	}
-	ui.logger.Printf("Fetched %d stock quotes", len(*ui.stockQuotes))
 
 	ui.marketQuotes, err = FetchMarket()
 
 	if err != nil {
 		panic(err)
 	}
-	// update stock window size to make life easier for us
-	// bad practice? idc
 	if len(*ui.stockQuotes) > ui.maxQuotesHeight {
 		ui.stockWin.h = ui.maxQuotesHeight
 	} else {
@@ -573,28 +587,22 @@ func (ui *Ui) navigateStockEnd() {
 }
 
 func (ui *Ui) navigateStockDown() {
-	// navigate down a line in the stock window
 	updatedPos := ui.selectedQuote + 1
 	if updatedPos >= len(*ui.stockQuotes) || len(*ui.stockQuotes) == 0 {
 		return
 	}
 
-	ui.logger.Printf("navigating stock down, updatedPos :%d", updatedPos)
 	if ui.selectedVisibleQuote+1 < ui.stockWin.h {
 		ui.selectedQuote = updatedPos
 		ui.selectedVisibleQuote += 1
 	} else if ui.selectedVisibleQuote+1 >= ui.stockWin.h {
-		ui.logger.Printf("Scrolling window down zerothQuote %d, stockWin.h %d, len(stockQuotes) %d", ui.zerothQuote, ui.stockWin.h, len(*ui.stockQuotes))
-
 		ui.zerothQuote += 1
 		ui.visibleQuotes = (*ui.stockQuotes)[ui.zerothQuote : ui.zerothQuote+ui.stockWin.h]
 		ui.selectedQuote = updatedPos
 	}
-	ui.logger.Printf("selected stock: %s", (*ui.stockQuotes)[ui.selectedQuote].Ticker)
 }
 
 func (ui *Ui) navigateStockUp() {
-	// navigate up a line in the stock window
 	updatedPos := ui.selectedQuote - 1
 	if updatedPos < 0 || len(*ui.stockQuotes) == 0 {
 		return
@@ -608,7 +616,6 @@ func (ui *Ui) navigateStockUp() {
 		ui.selectedQuote = updatedPos
 		ui.visibleQuotes = (*ui.stockQuotes)[ui.zerothQuote : ui.zerothQuote+ui.stockWin.h]
 	}
-	ui.logger.Printf("selected stock: %s", (*ui.stockQuotes)[ui.selectedQuote].Ticker)
 }
 
 func (ui *Ui) getQuoteByTicker(ticker string) *Quote {

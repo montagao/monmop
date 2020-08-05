@@ -2,6 +2,7 @@ package main
 
 import (
 	"fmt"
+	"reflect"
 	"regexp"
 	"strings"
 
@@ -34,6 +35,7 @@ func (editor *LineEditor) Prompt(cmd rune, quoteIndex int) {
 		'a': `add tickers: `,
 		'd': `delete selected ticker? y/n :`,
 		'/': `/`,
+		':': `:`,
 	}
 
 	if prompt, ok := prompts[cmd]; ok {
@@ -75,6 +77,7 @@ func (editor *LineEditor) Done() {
 }
 
 func (editor *LineEditor) Execute(selectedQuote int) (newQuote int) {
+	fg, bg := termbox.ColorDefault, termbox.ColorDefault
 	switch editor.cmd {
 	case 'd':
 		if strings.TrimSpace(strings.ToLower(editor.input)) == "y" {
@@ -96,19 +99,53 @@ func (editor *LineEditor) Execute(selectedQuote int) (newQuote int) {
 		}
 		return -1
 
+	case ':':
+		args := editor.tokenize(" ")
+		termbox.HideCursor()
+		termbox.Flush()
+		if args[0] == "save" {
+			portfolioName := args[1]
+			editor.profile.Portfolios[portfolioName] = portfolio{
+				Tickers: append([]string{}, editor.profile.Tickers...),
+			}
+			editor.prompt = fmt.Sprintf("saved portfolio as '%s'", portfolioName)
+			editor.commandWin.print(0, 0, fg, bg, editor.prompt)
+		} else if args[0] == "load" {
+			portfolioName := args[1]
+			portfolio, ok := editor.profile.Portfolios[portfolioName]
+			if !ok {
+				editor.Printf("portfolio not found: %s", portfolioName)
+				return -1
+			} else {
+				editor.profile.Tickers = append([]string{}, portfolio.Tickers...)
+
+				editor.prompt = fmt.Sprintf("loaded portfolio '%s'", portfolioName)
+				editor.commandWin.print(0, 0, fg, bg, editor.prompt)
+			}
+		} else if args[0] == "new" {
+			editor.profile.Tickers = []string{}
+			editor.prompt = fmt.Sprintf("creating new portfolio")
+			editor.commandWin.print(0, 0, fg, bg, editor.prompt)
+		} else if args[0] == "list" {
+			editor.prompt = fmt.Sprintf("saved portfolios: '%s'", reflect.ValueOf(editor.profile.Portfolios).MapKeys())
+			editor.commandWin.print(0, 0, fg, bg, editor.prompt)
+		} else {
+			editor.prompt = fmt.Sprintf("could not recognize command '%s'", args[0])
+			editor.commandWin.print(0, 0, fg, bg, editor.prompt)
+		}
+		return 0
 	}
-	return selectedQuote
+	return 0
 }
 
-func (editor *LineEditor) PrintSearchError(tickerName string) {
+func (editor *LineEditor) Printf(format string, a ...interface{}) {
 	fg, bg := termbox.ColorDefault, termbox.ColorDefault
-
-	editor.prompt = fmt.Sprintf("couldn't find specified ticker(s) '%s'", tickerName)
+	editor.prompt = fmt.Sprintf(format, a...)
 	editor.commandWin.print(0, 0, fg, bg, editor.prompt)
 }
 
 func (editor *LineEditor) AddQuotes() (ticker string) {
-	tickers := editor.tokenize()
+	tickers := editor.tokenize(",")
 	if len(tickers) > 0 {
 		// TODO: do some basic validation checks on tickers
 		editor.profile.Tickers = append(editor.profile.Tickers, tickers...)
@@ -170,8 +207,8 @@ func (editor *LineEditor) moveLeft() {
 	}
 }
 
-func (editor *LineEditor) tokenize() []string {
-	fields := strings.Split(strings.ToUpper(editor.input), ",")
+func (editor *LineEditor) tokenize(delim string) []string {
+	fields := strings.Split(editor.input, delim)
 	for i := range fields {
 		fields[i] = strings.TrimSpace(fields[i])
 	}

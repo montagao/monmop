@@ -2,9 +2,7 @@ package main
 
 import (
 	"encoding/json"
-	"fmt"
 	"io/ioutil"
-	"log"
 	"os"
 	"os/signal"
 	"os/user"
@@ -44,9 +42,14 @@ type app struct {
 	mode     *mode
 }
 
+type portfolio struct {
+	Tickers []string // list of stock tickers to display
+}
+
 type profile struct {
-	Tickers  []string // list of stock tickers to display
-	filepath string
+	Portfolios map[string]portfolio
+	filepath   string
+	Tickers    []string
 }
 
 func (profile *profile) Save() error {
@@ -54,7 +57,7 @@ func (profile *profile) Save() error {
 	if err != nil {
 		return err
 	}
-	log.Printf("saving to %s", profile.filepath)
+	// log.Printf("saving to %s", profile.filepath)
 
 	return ioutil.WriteFile(profile.filepath, data, 0644)
 }
@@ -74,11 +77,17 @@ func loadProfile(user *user.User) (*profile, error) {
 	data, err := ioutil.ReadFile(profile.filepath)
 	if err != nil {
 		// set some defaults
-		profile.Tickers = []string{"CASH", "SPLK", "GOOG"}
+		profile.Portfolios = map[string]portfolio{
+			"default": {
+				Tickers: []string{"GOOG", "AAPL", "AMZN", "MSFT"},
+			},
+		}
+		profile.Tickers = profile.Portfolios["default"].Tickers
 		profile.Save()
 	} else {
 		json.Unmarshal(data, profile)
 	}
+	profile.Tickers = profile.Portfolios["default"].Tickers
 
 	return profile, nil
 }
@@ -86,6 +95,7 @@ func loadProfile(user *user.User) (*profile, error) {
 func (app *app) saveProfile() error {
 	b, err := json.Marshal(app.profile)
 	if err != nil {
+		panic(err)
 		return err
 	}
 
@@ -102,21 +112,18 @@ func newApp() *app {
 		panic(err)
 	}
 
-	file, err = os.OpenFile("info.log", os.O_CREATE|os.O_APPEND|os.O_WRONLY, 0644)
-	if err != nil {
-		log.Fatal(err)
-	}
+	// file, err = os.OpenFile("info.log", os.O_CREATE|os.O_APPEND|os.O_WRONLY, 0644)
+	// if err != nil {
+	// 	log.Fatal(err)
+	// }
 
-	logger := log.New(file, "DEBUG: ", log.Ldate|log.Ltime|log.Lshortfile)
-
-	logger.Print("I'm loggin in app")
 	profile, err := loadProfile(user)
 	if err != nil {
 		panic(err)
 	}
 
 	mode := NORMAL
-	ui := newUI(profile, &mode, logger)
+	ui := newUI(profile, &mode)
 
 	quitChan := make(chan bool, 1)
 	osChan := make(chan os.Signal, 1)
@@ -157,13 +164,11 @@ func newApp() *app {
 // main app loop
 func (app *app) loop() {
 	app.fetchAndDraw()
+	defer file.Close()
 	for {
 		select {
 		case <-app.quitChan:
-			// TODO: save config on quit
-			fmt.Printf("bye!")
-			file.Close()
-			termbox.Close()
+			app.saveProfile()
 			return // exit app
 		case event := <-app.keyQueue:
 			switch event.Type {
@@ -208,6 +213,10 @@ func (app *app) loop() {
 						app.ui.Prompt(event.Ch)
 						*app.mode = COMMAND
 					} else if event.Ch == 'd' {
+						// a for "add"
+						app.ui.Prompt(event.Ch)
+						*app.mode = COMMAND
+					} else if event.Ch == ':' {
 						// a for "add"
 						app.ui.Prompt(event.Ch)
 						*app.mode = COMMAND
