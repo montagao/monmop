@@ -2,7 +2,6 @@ package main
 
 import (
 	"fmt"
-	"log"
 	"reflect"
 	"regexp"
 	"strings"
@@ -19,16 +18,14 @@ type LineEditor struct {
 	quotes     *[]Quote       // pointer to quotes
 	profile    *profile       // pointer to profile
 	regex      *regexp.Regexp // regex to split comma-delimited input string
-	logger     *log.Logger
 	commandWin *Win
 }
 
-func NewLineEditor(profile *profile, quotes *[]Quote, commandWin *Win, logger *log.Logger) *LineEditor {
+func NewLineEditor(profile *profile, quotes *[]Quote, commandWin *Win) *LineEditor {
 	return &LineEditor{
 		quotes:     quotes,
 		profile:    profile,
 		commandWin: commandWin,
-		logger:     logger,
 	}
 }
 

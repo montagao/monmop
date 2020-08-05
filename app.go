@@ -3,7 +3,6 @@ package main
 import (
 	"encoding/json"
 	"io/ioutil"
-	"log"
 	"os"
 	"os/signal"
 	"os/user"
@@ -41,7 +40,6 @@ type app struct {
 	keyQueue chan termbox.Event
 	profile  *profile
 	mode     *mode
-	logger   *log.Logger
 }
 
 type portfolio struct {
@@ -114,21 +112,18 @@ func newApp() *app {
 		panic(err)
 	}
 
-	file, err = os.OpenFile("info.log", os.O_CREATE|os.O_APPEND|os.O_WRONLY, 0644)
-	if err != nil {
-		log.Fatal(err)
-	}
+	// file, err = os.OpenFile("info.log", os.O_CREATE|os.O_APPEND|os.O_WRONLY, 0644)
+	// if err != nil {
+	// 	log.Fatal(err)
+	// }
 
-	logger := log.New(file, "DEBUG: ", log.Ldate|log.Ltime|log.Lshortfile)
-
-	logger.Print("I'm loggin in app")
 	profile, err := loadProfile(user)
 	if err != nil {
 		panic(err)
 	}
 
 	mode := NORMAL
-	ui := newUI(profile, &mode, logger)
+	ui := newUI(profile, &mode)
 
 	quitChan := make(chan bool, 1)
 	osChan := make(chan os.Signal, 1)
@@ -145,7 +140,6 @@ func newApp() *app {
 	go func() {
 		<-osChan
 		// quit on any OS kill/interrupt signal
-		logger.Print("got the quit signal")
 		quitChan <- true
 		return
 	}()
@@ -163,7 +157,6 @@ func newApp() *app {
 		keyQueue: keyQueue,
 		profile:  profile,
 		mode:     &mode,
-		logger:   logger,
 	}
 
 }
@@ -176,7 +169,6 @@ func (app *app) loop() {
 		select {
 		case <-app.quitChan:
 			// TODO: save config on quit
-			app.logger.Print("quitting..")
 			app.saveProfile()
 			return // exit app
 		case event := <-app.keyQueue:
@@ -238,7 +230,6 @@ func (app *app) loop() {
 					}
 				case SORT:
 					if event.Ch == 'q' || event.Ch == 'Q' {
-						app.logger.Print("quitting.. (pressed q)")
 						app.saveProfile()
 						return
 					} else if isLabelNavigationEvent(event) {
