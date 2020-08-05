@@ -164,6 +164,7 @@ func newUI(profile *profile, mode *mode, logger *log.Logger) *Ui {
 				x: 0,
 				y: htot - 1,
 			},
+			logger,
 		),
 		logger: logger,
 	}
@@ -226,7 +227,9 @@ func (ui *Ui) ExecuteCommand() { // execute some command ui.logger.Print("execut
 		tickerName := ui.lineEditor.AddQuotes()
 		ui.GetQuotes()
 		newQ := ui.getQuoteByTicker(tickerName)
-		ui.resetSelection(*newQ)
+		if newQ != nil {
+			ui.updateSelection(*newQ)
+		}
 		ui.lineEditor.Done()
 	case 'd':
 		oldQuoteId := ui.lineEditor.Execute(ui.selectedQuote)
@@ -234,7 +237,7 @@ func (ui *Ui) ExecuteCommand() { // execute some command ui.logger.Print("execut
 		ui.stockWin.Clear()
 		ui.GetQuotes()
 		if oldQuoteId >= 0 {
-			ui.resetSelection((*ui.stockQuotes)[oldQuoteId])
+			ui.updateSelection((*ui.stockQuotes)[oldQuoteId])
 		}
 		ui.lineEditor.Done()
 	case '/':
@@ -244,8 +247,13 @@ func (ui *Ui) ExecuteCommand() { // execute some command ui.logger.Print("execut
 		if oldQuoteId < 0 {
 			ui.lineEditor.PrintSearchError(tickerName)
 		} else {
-			ui.resetSelection((*ui.stockQuotes)[oldQuoteId])
+			ui.updateSelection((*ui.stockQuotes)[oldQuoteId])
 		}
+	case ':':
+		ui.lineEditor.Execute(ui.selectedQuote)
+		ui.stockWin.Clear()
+		ui.GetQuotes()
+		ui.resetSelection()
 	}
 	ui.Draw()
 }
@@ -257,7 +265,7 @@ func (ui *Ui) HandleLineEditorInput(ev termbox.Event) {
 func (ui *Ui) OpenInBrowser() {
 	var err error
 	q := (*ui.stockQuotes)[ui.selectedQuote]
-	url := "https://wallmine.com/" + q.Ticker
+	url := "https://finance.yahoo.com/quote/" + q.Ticker
 
 	switch runtime.GOOS {
 	case "linux":
@@ -308,6 +316,10 @@ func (ui *Ui) navigateLabelRight() {
 }
 
 func (ui *Ui) sortByLabelDsc() {
+	if len(*ui.stockQuotes) == 0 {
+		return
+	}
+
 	oldQ := (*ui.stockQuotes)[ui.selectedQuote]
 
 	sort.SliceStable(*ui.stockQuotes, func(i, j int) bool {
@@ -329,11 +341,15 @@ func (ui *Ui) sortByLabelDsc() {
 		}
 	})
 	ui.profile.Tickers = ui.getSortedTickers(*ui.stockQuotes)
-	ui.resetSelection(oldQ)
+	ui.updateSelection(oldQ)
 
 }
 
 func (ui *Ui) sortByLabelAsc() {
+	if len(*ui.stockQuotes) == 0 {
+		return
+	}
+
 	oldQ := (*ui.stockQuotes)[ui.selectedQuote]
 	sort.SliceStable(*ui.stockQuotes, func(i, j int) bool {
 		q := reflect.ValueOf((*ui.stockQuotes)[i]).Field(ui.selectedLabel).Interface()
@@ -354,13 +370,13 @@ func (ui *Ui) sortByLabelAsc() {
 		}
 	})
 	ui.profile.Tickers = ui.getSortedTickers(*ui.stockQuotes)
-	ui.resetSelection(oldQ)
+	ui.updateSelection(oldQ)
 }
 
-func (ui *Ui) resetSelection(oldQ Quote) {
-	ui.logger.Printf("Resetting selection")
-	for id, _ := range *ui.stockQuotes {
-		if (*ui.stockQuotes)[id] == oldQ {
+func (ui *Ui) updateSelection(newQ Quote) {
+	ui.logger.Printf("updating selection")
+	for id := range *ui.stockQuotes {
+		if (*ui.stockQuotes)[id] == newQ {
 			if id < ui.zerothQuote {
 				// case if selected quote above current window
 				ui.logger.Printf("reseting stock up")
@@ -370,7 +386,7 @@ func (ui *Ui) resetSelection(oldQ Quote) {
 			} else if id >= ui.zerothQuote+ui.stockWin.h {
 				// case if selected quote is below current window
 				// Do nothing.
-				ui.logger.Printf("reseting stock down to oldQ %s", oldQ.Ticker)
+				ui.logger.Printf("reseting stock down to oldQ %s", newQ.Ticker)
 				for id >= ui.zerothQuote+ui.stockWin.h {
 					ui.logger.Printf("id: %d ui.zerothQuote: %d ui.stockWin.h %d", id, ui.zerothQuote, ui.stockWin.h)
 					ui.navigateStockDown()
@@ -385,6 +401,16 @@ func (ui *Ui) resetSelection(oldQ Quote) {
 			break
 		}
 	}
+}
+
+func (ui *Ui) resetSelection() {
+	if len(*ui.stockQuotes) == 0 {
+		return
+	}
+	ui.zerothQuote = 0
+	ui.selectedVisibleQuote = 0
+	ui.selectedQuote = 0
+	ui.visibleQuotes = (*ui.stockQuotes)[ui.zerothQuote : ui.zerothQuote+ui.stockWin.h]
 }
 
 func (ui *Ui) getSortedTickers(quotes []Quote) []string {
@@ -439,7 +465,7 @@ func (ui *Ui) drawMarketWin() {
 	y := 0
 	for _, q := range *ui.marketQuotes {
 		humanFormatted := float2Str(q.LastTrade, 2)
-		tickerLine := fmt.Sprintf("%s ", marketNames[q.Ticker], humanFormatted, q.ChangePct)
+		tickerLine := fmt.Sprintf("%s %s %.2f", marketNames[q.Ticker], humanFormatted, q.ChangePct)
 		if x+len(tickerLine) > ui.marketWin.w {
 			y++
 			x = 0

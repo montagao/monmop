@@ -2,7 +2,6 @@ package main
 
 import (
 	"encoding/json"
-	"fmt"
 	"io/ioutil"
 	"log"
 	"os"
@@ -42,11 +41,17 @@ type app struct {
 	keyQueue chan termbox.Event
 	profile  *profile
 	mode     *mode
+	logger   *log.Logger
+}
+
+type portfolio struct {
+	Tickers []string // list of stock tickers to display
 }
 
 type profile struct {
-	Tickers  []string // list of stock tickers to display
-	filepath string
+	Portfolios map[string]portfolio
+	filepath   string
+	Tickers    []string
 }
 
 func (profile *profile) Save() error {
@@ -54,7 +59,7 @@ func (profile *profile) Save() error {
 	if err != nil {
 		return err
 	}
-	log.Printf("saving to %s", profile.filepath)
+	// log.Printf("saving to %s", profile.filepath)
 
 	return ioutil.WriteFile(profile.filepath, data, 0644)
 }
@@ -74,11 +79,17 @@ func loadProfile(user *user.User) (*profile, error) {
 	data, err := ioutil.ReadFile(profile.filepath)
 	if err != nil {
 		// set some defaults
-		profile.Tickers = []string{"CASH", "SPLK", "GOOG"}
+		profile.Portfolios = map[string]portfolio{
+			"default": {
+				Tickers: []string{"GOOG", "AAPL", "AMZN", "MSFT"},
+			},
+		}
+		profile.Tickers = profile.Portfolios["default"].Tickers
 		profile.Save()
 	} else {
 		json.Unmarshal(data, profile)
 	}
+	profile.Tickers = profile.Portfolios["default"].Tickers
 
 	return profile, nil
 }
@@ -86,6 +97,7 @@ func loadProfile(user *user.User) (*profile, error) {
 func (app *app) saveProfile() error {
 	b, err := json.Marshal(app.profile)
 	if err != nil {
+		panic(err)
 		return err
 	}
 
@@ -133,6 +145,7 @@ func newApp() *app {
 	go func() {
 		<-osChan
 		// quit on any OS kill/interrupt signal
+		logger.Print("got the quit signal")
 		quitChan <- true
 		return
 	}()
@@ -150,6 +163,7 @@ func newApp() *app {
 		keyQueue: keyQueue,
 		profile:  profile,
 		mode:     &mode,
+		logger:   logger,
 	}
 
 }
@@ -157,13 +171,13 @@ func newApp() *app {
 // main app loop
 func (app *app) loop() {
 	app.fetchAndDraw()
+	defer file.Close()
 	for {
 		select {
 		case <-app.quitChan:
 			// TODO: save config on quit
-			fmt.Printf("bye!")
-			file.Close()
-			termbox.Close()
+			app.logger.Print("quitting..")
+			app.saveProfile()
 			return // exit app
 		case event := <-app.keyQueue:
 			switch event.Type {
@@ -211,6 +225,10 @@ func (app *app) loop() {
 						// a for "add"
 						app.ui.Prompt(event.Ch)
 						*app.mode = COMMAND
+					} else if event.Ch == ':' {
+						// a for "add"
+						app.ui.Prompt(event.Ch)
+						*app.mode = COMMAND
 					} else if event.Ch == '/' {
 						// a for "add"
 						app.ui.Prompt(event.Ch)
@@ -220,6 +238,7 @@ func (app *app) loop() {
 					}
 				case SORT:
 					if event.Ch == 'q' || event.Ch == 'Q' {
+						app.logger.Print("quitting.. (pressed q)")
 						app.saveProfile()
 						return
 					} else if isLabelNavigationEvent(event) {

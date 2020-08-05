@@ -2,6 +2,8 @@ package main
 
 import (
 	"fmt"
+	"log"
+	"reflect"
 	"regexp"
 	"strings"
 
@@ -17,14 +19,16 @@ type LineEditor struct {
 	quotes     *[]Quote       // pointer to quotes
 	profile    *profile       // pointer to profile
 	regex      *regexp.Regexp // regex to split comma-delimited input string
+	logger     *log.Logger
 	commandWin *Win
 }
 
-func NewLineEditor(profile *profile, quotes *[]Quote, commandWin *Win) *LineEditor {
+func NewLineEditor(profile *profile, quotes *[]Quote, commandWin *Win, logger *log.Logger) *LineEditor {
 	return &LineEditor{
 		quotes:     quotes,
 		profile:    profile,
 		commandWin: commandWin,
+		logger:     logger,
 	}
 }
 
@@ -34,6 +38,7 @@ func (editor *LineEditor) Prompt(cmd rune, quoteIndex int) {
 		'a': `add tickers: `,
 		'd': `delete selected ticker? y/n :`,
 		'/': `/`,
+		':': `:`,
 	}
 
 	if prompt, ok := prompts[cmd]; ok {
@@ -75,6 +80,7 @@ func (editor *LineEditor) Done() {
 }
 
 func (editor *LineEditor) Execute(selectedQuote int) (newQuote int) {
+	fg, bg := termbox.ColorDefault, termbox.ColorDefault
 	switch editor.cmd {
 	case 'd':
 		if strings.TrimSpace(strings.ToLower(editor.input)) == "y" {
@@ -96,10 +102,46 @@ func (editor *LineEditor) Execute(selectedQuote int) (newQuote int) {
 		}
 		return -1
 
+	case ':':
+		args := editor.tokenize(" ")
+		termbox.HideCursor()
+		termbox.Flush()
+		if args[0] == "save" {
+			portfolioName := args[1]
+			editor.profile.Portfolios[portfolioName] = portfolio{
+				Tickers: append([]string{}, editor.profile.Tickers...),
+			}
+			editor.prompt = fmt.Sprintf("saved portfolio as '%s'", portfolioName)
+			editor.commandWin.print(0, 0, fg, bg, editor.prompt)
+		} else if args[0] == "load" {
+			portfolioName := args[1]
+			portfolio, ok := editor.profile.Portfolios[portfolioName]
+			if !ok {
+				editor.PrintPortfolioNotFound(portfolioName)
+				return -1
+			} else {
+				editor.profile.Tickers = append([]string{}, portfolio.Tickers...)
+
+				editor.prompt = fmt.Sprintf("loaded portfolio '%s'", portfolioName)
+				editor.commandWin.print(0, 0, fg, bg, editor.prompt)
+			}
+		} else if args[0] == "new" {
+			editor.profile.Tickers = []string{}
+			editor.prompt = fmt.Sprintf("creating new portfolio")
+			editor.commandWin.print(0, 0, fg, bg, editor.prompt)
+		} else if args[0] == "list" {
+			editor.prompt = fmt.Sprintf("saved portfolios: '%s'", reflect.ValueOf(editor.profile.Portfolios).MapKeys())
+			editor.commandWin.print(0, 0, fg, bg, editor.prompt)
+		} else {
+			editor.prompt = fmt.Sprintf("could not recognize command '%s'", args[0])
+			editor.commandWin.print(0, 0, fg, bg, editor.prompt)
+		}
+		return 0
 	}
-	return selectedQuote
+	return 0
 }
 
+// TODO: refactor error printing
 func (editor *LineEditor) PrintSearchError(tickerName string) {
 	fg, bg := termbox.ColorDefault, termbox.ColorDefault
 
@@ -107,8 +149,22 @@ func (editor *LineEditor) PrintSearchError(tickerName string) {
 	editor.commandWin.print(0, 0, fg, bg, editor.prompt)
 }
 
+func (editor *LineEditor) PrintNotEnoughArgs() {
+	fg, bg := termbox.ColorDefault, termbox.ColorDefault
+
+	editor.prompt = fmt.Sprintf("not enough arguments")
+	editor.commandWin.print(0, 0, fg, bg, editor.prompt)
+}
+
+func (editor *LineEditor) PrintPortfolioNotFound(pname string) {
+	fg, bg := termbox.ColorDefault, termbox.ColorDefault
+
+	editor.prompt = fmt.Sprintf("portfolio %s not found", pname)
+	editor.commandWin.print(0, 0, fg, bg, editor.prompt)
+}
+
 func (editor *LineEditor) AddQuotes() (ticker string) {
-	tickers := editor.tokenize()
+	tickers := editor.tokenize(",")
 	if len(tickers) > 0 {
 		// TODO: do some basic validation checks on tickers
 		editor.profile.Tickers = append(editor.profile.Tickers, tickers...)
@@ -170,8 +226,8 @@ func (editor *LineEditor) moveLeft() {
 	}
 }
 
-func (editor *LineEditor) tokenize() []string {
-	fields := strings.Split(strings.ToUpper(editor.input), ",")
+func (editor *LineEditor) tokenize(delim string) []string {
+	fields := strings.Split(editor.input, delim)
 	for i := range fields {
 		fields[i] = strings.TrimSpace(fields[i])
 	}
