@@ -4,7 +4,7 @@ monmop is my own fork of [mop](https://github.com/mop-tracker/mop), which is a c
 
 ![Screenshot](https://raw.githubusercontent.com/montagao/monmop/master/docs/screenshot.png "monmop")
 
-This fork aims to add vim-like navigation and editing and being able to open up a particular stock on wallmine finance for more details.
+This fork aims to add vim-like navigation and editing and being able to open up a particular stock on yahoo finance for more details.
 
 ### Installing monmop
 requires go v1.13+
