@@ -85,7 +85,6 @@ func (editor *LineEditor) Execute(selectedQuote int) (newQuote int) {
 				if q := (*editor.quotes)[id]; id == selectedQuote {
 					// remove from list of tickers
 					editor.profile.Tickers = removeTicker(editor.profile.Tickers, q.Ticker)
-					// TODO: prevent adding duplicate tickers
 					return selectedQuote - 1
 				}
 			}
@@ -144,15 +143,22 @@ func (editor *LineEditor) Printf(format string, a ...interface{}) {
 	editor.commandWin.print(0, 0, fg, bg, editor.prompt)
 }
 
-func (editor *LineEditor) AddQuotes() (ticker string) {
+func (editor *LineEditor) AddQuotes() (ticker string, err error) {
+	// input for tickers should match "GOOG" or "GOOG, AAPL" ignoring whitespace inbetween
+	validFmt := regexp.MustCompile(`^(\s*[a-zA-z-]+\s*,?)*$`)
+	if !validFmt.MatchString(editor.input) {
+		return editor.input, fmt.Errorf("parse error")
+	}
 	tickers := editor.tokenize(",")
-	if len(tickers) > 0 {
-		// TODO: do some basic validation checks on tickers
-		editor.profile.Tickers = append(editor.profile.Tickers, tickers...)
+	for _, ticker := range tickers {
+		// ignore duplicate tickers
+		if getTickerId(editor.profile.Tickers, ticker) == -1 {
+			editor.profile.Tickers = append(editor.profile.Tickers, ticker)
+		}
 	}
 
 	// return the last ticker added so we can select it
-	return tickers[len(tickers)-1]
+	return tickers[len(tickers)-1], nil
 }
 
 func removeTicker(s []string, r string) []string {

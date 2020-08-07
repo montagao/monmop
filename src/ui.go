@@ -43,7 +43,7 @@ const (
 	layoutUS = "01/02/2006"
 )
 
-const appTitle = "monmop 0.5"
+const appTitle = "monmop 0.6"
 
 const (
 	titleWinHeight   int = 1
@@ -222,13 +222,18 @@ func (ui *Ui) Prompt(cmd rune) {
 func (ui *Ui) ExecuteCommand() {
 	switch ui.lineEditor.cmd {
 	case 'a':
-		tickerName := ui.lineEditor.AddQuotes()
-		ui.GetQuotes()
-		newQ := ui.getQuoteByTicker(tickerName)
-		if newQ != nil {
-			ui.updateSelection(*newQ)
+		tickerName, err := ui.lineEditor.AddQuotes()
+		if err != nil {
+			ui.lineEditor.Done()
+			ui.lineEditor.Printf("%s is not a valid list of tickers", tickerName)
+		} else {
+			ui.GetQuotes()
+			newQ := ui.getQuoteByTicker(tickerName)
+			if newQ != nil {
+				ui.updateSelection(*newQ)
+			}
+			ui.lineEditor.Done()
 		}
-		ui.lineEditor.Done()
 	case 'd':
 		oldQuoteId := ui.lineEditor.Execute(ui.selectedQuote)
 		ui.lineEditor.Done()
