@@ -91,13 +91,7 @@ func (editor *LineEditor) Execute(selectedQuote int) (newQuote int) {
 		}
 	case '/':
 		// perform a search on a ticker
-		for id, q := range *editor.quotes {
-			if strings.TrimSpace(strings.ToUpper(editor.input)) == q.Ticker {
-				return id
-			}
-		}
-		return -1
-
+		return getTickerId(editor.profile.Tickers, strings.TrimSpace(strings.ToUpper(editor.input)))
 	case ':':
 		args := editor.tokenize(" ")
 		termbox.HideCursor()
@@ -138,7 +132,7 @@ func (editor *LineEditor) Execute(selectedQuote int) (newQuote int) {
 }
 
 func (editor *LineEditor) Printf(format string, a ...interface{}) {
-	fg, bg := termbox.ColorDefault, termbox.ColorDefault
+	fg, bg := termbox.ColorRed, termbox.ColorWhite
 	editor.prompt = fmt.Sprintf(format, a...)
 	editor.commandWin.print(0, 0, fg, bg, editor.prompt)
 }
@@ -178,10 +172,8 @@ func (editor *LineEditor) insertCharacter(ch rune) {
 		// Append the character to the end of the input string.
 		editor.input += string(ch)
 	}
-	// TODO: make a heplper function for printing
 	editor.commandWin.print(len(editor.prompt), 0, fg, bg, editor.input)
 	editor.moveRight()
-
 }
 
 func (editor *LineEditor) deletePrevChar() {
