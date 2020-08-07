@@ -456,6 +456,11 @@ func (ui *Ui) drawLabelWin() {
 }
 
 func (ui *Ui) drawMarketWin() {
+	if ui.marketQuotes == nil {
+		// no op
+		return
+	}
+
 	fg, bg := termbox.ColorDefault, termbox.ColorDefault
 
 	x := 0
@@ -481,6 +486,10 @@ func (ui *Ui) drawMarketWin() {
 }
 
 func (ui *Ui) drawStockWin() {
+	if ui.stockQuotes == nil {
+		return
+	}
+
 	_, bg := termbox.ColorDefault, termbox.ColorDefault
 
 	for id, q := range ui.visibleQuotes {
@@ -554,14 +563,15 @@ func (ui *Ui) GetQuotes() {
 	var err error
 	ui.stockQuotes, err = FetchQuotes(ui.profile.Tickers)
 	if err != nil {
-		fmt.Printf("error : %v", err)
-		panic(err)
+		ui.lineEditor.Printf("couldn't fetch quotes:  %v", err)
+		return
 	}
 
 	ui.marketQuotes, err = FetchMarket()
 
 	if err != nil {
-		panic(err)
+		ui.lineEditor.Printf("couldn't fetch quotes:  %v", err)
+		return
 	}
 	if len(*ui.stockQuotes) > ui.maxQuotesHeight {
 		ui.stockWin.h = ui.maxQuotesHeight
