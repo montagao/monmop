@@ -203,6 +203,7 @@ func (ui *Ui) Draw() {
 	ui.drawMarketWin()
 	ui.drawLabelWin()
 	ui.drawStockWin()
+	ui.drawCommandWin()
 
 	termbox.Flush()
 }
@@ -217,6 +218,7 @@ func (ui *Ui) Clear() {
 func (ui *Ui) Prompt(cmd rune) {
 	ui.lineEditor.Done() // clear the buffer
 	ui.lineEditor.Prompt(cmd, ui.selectedQuote)
+	ui.Draw()
 }
 
 func (ui *Ui) ExecuteCommand() {
@@ -225,7 +227,7 @@ func (ui *Ui) ExecuteCommand() {
 		tickerName, err := ui.lineEditor.AddQuotes()
 		if err != nil {
 			ui.lineEditor.Done()
-			ui.lineEditor.Printf("%s is not a valid list of tickers", tickerName)
+			ui.lineEditor.PrintErrorf("%s is not a valid list of tickers", tickerName)
 		} else {
 			ui.GetQuotes()
 			newQ := ui.getQuoteByTicker(tickerName)
@@ -248,7 +250,7 @@ func (ui *Ui) ExecuteCommand() {
 		tickerName := ui.lineEditor.input
 		ui.lineEditor.Done()
 		if oldQuoteId < 0 {
-			ui.lineEditor.Printf("couldn't find specified ticker(s): %s ", tickerName)
+			ui.lineEditor.PrintErrorf("couldn't find specified ticker(s): %s ", tickerName)
 		} else {
 			ui.updateSelection((*ui.stockQuotes)[oldQuoteId])
 		}
@@ -263,6 +265,7 @@ func (ui *Ui) ExecuteCommand() {
 
 func (ui *Ui) HandleLineEditorInput(ev termbox.Event) {
 	ui.lineEditor.Handle(ev)
+	ui.Draw()
 }
 
 func (ui *Ui) OpenInBrowser() {
@@ -559,18 +562,22 @@ func (ui *Ui) drawStockWin() {
 	}
 }
 
+func (ui *Ui) drawCommandWin() {
+	ui.lineEditor.Draw()
+}
+
 func (ui *Ui) GetQuotes() {
 	var err error
 	ui.stockQuotes, err = FetchQuotes(ui.profile.Tickers)
 	if err != nil {
-		ui.lineEditor.Printf("couldn't fetch quotes:  %v", err)
+		ui.lineEditor.PrintErrorf("couldn't fetch quotes:  %v", err)
 		return
 	}
 
 	ui.marketQuotes, err = FetchMarket()
 
 	if err != nil {
-		ui.lineEditor.Printf("couldn't fetch quotes:  %v", err)
+		ui.lineEditor.PrintErrorf("couldn't fetch quotes:  %v", err)
 		return
 	}
 	if len(*ui.stockQuotes) > ui.maxQuotesHeight {
@@ -634,6 +641,10 @@ func (ui *Ui) navigateStockUp() {
 }
 
 func (ui *Ui) getQuoteByTicker(ticker string) *Quote {
+	if ui.stockQuotes == nil {
+		// no op
+		return nil
+	}
 	for id, q := range *ui.stockQuotes {
 		if q.Ticker == ticker {
 			return &(*ui.stockQuotes)[id]

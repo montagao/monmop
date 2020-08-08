@@ -112,11 +112,6 @@ func newApp() *app {
 		panic(err)
 	}
 
-	// file, err = os.OpenFile("info.log", os.O_CREATE|os.O_APPEND|os.O_WRONLY, 0644)
-	// if err != nil {
-	// 	log.Fatal(err)
-	// }
-
 	profile, err := loadProfile(user)
 	if err != nil {
 		panic(err)
@@ -182,6 +177,7 @@ func (app *app) loop() {
 					} else if event.Key == termbox.KeyEsc {
 						app.ui.lineEditor.Done()
 						*app.mode = NORMAL
+						app.ui.Draw()
 					} else {
 						app.ui.HandleLineEditorInput(event)
 					}
