@@ -56,7 +56,8 @@ type Win struct {
 	w, h, x, y int
 }
 
-func (win *Win) print(x, y int, fg, bg termbox.Attribute, s string) (termbox.Attribute, termbox.Attribute) {
+func (win *Win) print(x, y int, fg, bg termbox.Attribute, s string) (
+	termbox.Attribute, termbox.Attribute) {
 
 	for i := 0; i < len(s); i++ {
 		// decodes a utf8 from a string
@@ -140,7 +141,8 @@ func newUI(profile *profile, mode *mode) *Ui {
 		},
 		stockWin: &Win{
 			w: wtot,
-			h: htot - (titleWinHeight + marketWinHeight + labelWinHeight + commandWinHeight),
+			h: htot - (titleWinHeight + marketWinHeight + labelWinHeight +
+				commandWinHeight),
 			x: 0,
 			y: 6,
 		},
@@ -181,10 +183,12 @@ func (ui *Ui) Resize() {
 	ui.marketWin.w = wtot
 	ui.labelWin.w = wtot
 	ui.stockWin.w = wtot
-	ui.stockWin.h = htot - (ui.titleWin.h + ui.marketWin.h + ui.commandWin.h + ui.labelWin.h)
+	ui.stockWin.h = htot - (ui.titleWin.h + ui.marketWin.h + ui.commandWin.h +
+		ui.labelWin.h)
 	ui.commandWin.w = wtot
 	ui.commandWin.y = htot - 1
-	ui.maxQuotesHeight = htot - (ui.titleWin.h + ui.marketWin.h + ui.commandWin.h + ui.labelWin.h)
+	ui.maxQuotesHeight = htot - (ui.titleWin.h + ui.marketWin.h +
+		ui.commandWin.h + ui.labelWin.h)
 
 	if ui.maxQuotesHeight < 0 {
 		ui.maxQuotesHeight = 0
@@ -227,7 +231,8 @@ func (ui *Ui) ExecuteCommand() {
 		tickerName, err := ui.lineEditor.AddQuotes()
 		if err != nil {
 			ui.lineEditor.Done()
-			ui.lineEditor.PrintErrorf("%s is not a valid list of tickers", tickerName)
+			ui.lineEditor.PrintErrorf("%s is not a valid list of tickers",
+				tickerName)
 		} else {
 			ui.GetQuotes()
 			newQ := ui.getQuoteByTicker(tickerName)
@@ -250,7 +255,8 @@ func (ui *Ui) ExecuteCommand() {
 		tickerName := ui.lineEditor.input
 		ui.lineEditor.Done()
 		if oldQuoteId < 0 {
-			ui.lineEditor.PrintErrorf("couldn't find specified ticker(s): %s ", tickerName)
+			ui.lineEditor.PrintErrorf("couldn't find specified ticker(s): %s ",
+				tickerName)
 		} else {
 			ui.updateSelection((*ui.stockQuotes)[oldQuoteId])
 		}
@@ -389,7 +395,6 @@ func (ui *Ui) updateSelection(newQ Quote) {
 				}
 			} else if id >= ui.zerothQuote+ui.stockWin.h {
 				// case if selected quote is below current window
-				// Do nothing.
 				for id >= ui.zerothQuote+ui.stockWin.h {
 					ui.navigateStockDown()
 				}
@@ -421,7 +426,7 @@ func (ui *Ui) getSortedTickers(quotes []Quote) []string {
 	return tickers
 }
 
-// Temp for playing aroudn with termbox
+// Temp for playing around with termbox
 func (ui *Ui) drawTitleLine() {
 	fg, bg := termbox.ColorDefault|termbox.AttrBold, termbox.ColorDefault
 
@@ -430,7 +435,8 @@ func (ui *Ui) drawTitleLine() {
 	timeString := currentTime.Format(time.UnixDate)
 
 	// %v and -%v for right and left justification respectively
-	title := fmt.Sprintf("%-*v%*v", ui.titleWin.w/2, appTitle, ui.titleWin.w/2, timeString)
+	title := fmt.Sprintf("%-*v%*v", ui.titleWin.w/2, appTitle, ui.titleWin.w/2,
+		timeString)
 
 	ui.titleWin.print(0, 0, fg, bg, title)
 }
@@ -446,7 +452,6 @@ func (ui *Ui) drawLabelWin() {
 			label = fmt.Sprintf("%-*v", col.width, col.name+" "+ui.sortSymbol)
 			ui.labelWin.print(x, 0, termbox.ColorBlack, termbox.ColorWhite, label)
 		} else if id == ui.selectedLabel && *ui.mode != SORT {
-			// TODO: draw arrow based on sort typea (asc/dsc)
 			label = fmt.Sprintf("%-*v", col.width, col.name+" "+ui.sortSymbol)
 			ui.labelWin.print(x, 0, fg, bg, label)
 		} else {
@@ -470,7 +475,8 @@ func (ui *Ui) drawMarketWin() {
 	y := 0
 	for _, q := range *ui.marketQuotes {
 		humanFormatted := float2Str(q.LastTrade, 2)
-		tickerLine := fmt.Sprintf("%s %s %.2f", marketNames[q.Ticker], humanFormatted, q.ChangePct)
+		tickerLine := fmt.Sprintf("%s %s %.2f", marketNames[q.Ticker],
+			humanFormatted, q.ChangePct)
 		if x+len(tickerLine) > ui.marketWin.w {
 			y++
 			x = 0
@@ -534,12 +540,15 @@ func (ui *Ui) drawStockWin() {
 				humanFormatted := float2Str(val, ui.layout.columns[i].precision)
 				if (strings.Contains(ui.layout.columns[i].name, "Change") ||
 					strings.Contains(ui.layout.columns[i].name, "After") ||
-					strings.Contains(ui.layout.columns[i].name, "Pre")) && val >= 0 {
+					strings.Contains(ui.layout.columns[i].name, "Pre")) &&
+					val >= 0 {
 					// TODO: just add an "advancing" field in Quote
 					humanFormatted = "+" + humanFormatted
-					tickerLine = tickerLine + fmt.Sprintf("%-*v", ui.layout.columns[i].width, humanFormatted)
+					tickerLine = tickerLine + fmt.Sprintf("%-*v",
+						ui.layout.columns[i].width, humanFormatted)
 				} else {
-					tickerLine = tickerLine + fmt.Sprintf("%-*v", ui.layout.columns[i].width, humanFormatted)
+					tickerLine = tickerLine + fmt.Sprintf("%-*v",
+						ui.layout.columns[i].width, humanFormatted)
 				}
 			} else if strings.Contains(ui.layout.columns[i].name, "Earnings") {
 				earningsTs := string(fieldVal.(json.Number))
@@ -551,10 +560,12 @@ func (ui *Ui) drawStockWin() {
 					earningsStr = tm.Format(layoutUS)
 				}
 
-				tickerLine = tickerLine + fmt.Sprintf("%-*v", ui.layout.columns[i].width, earningsStr)
+				tickerLine = tickerLine + fmt.Sprintf("%-*v",
+					ui.layout.columns[i].width, earningsStr)
 
 			} else {
-				tickerLine = tickerLine + fmt.Sprintf("%-*v", ui.layout.columns[i].width, fieldVal)
+				tickerLine = tickerLine + fmt.Sprintf("%-*v",
+					ui.layout.columns[i].width, fieldVal)
 			}
 		}
 
@@ -586,7 +597,8 @@ func (ui *Ui) GetQuotes() {
 		ui.stockWin.h = len(*ui.stockQuotes)
 	}
 
-	ui.visibleQuotes = (*ui.stockQuotes)[ui.zerothQuote : ui.zerothQuote+ui.stockWin.h]
+	ui.visibleQuotes = (*ui.stockQuotes)[ui.zerothQuote : ui.zerothQuote+
+		ui.stockWin.h]
 	ui.lineEditor.quotes = ui.stockQuotes
 
 	if ui.sortSymbol == DESCENDING_CHAR {
@@ -619,7 +631,8 @@ func (ui *Ui) navigateStockDown() {
 		ui.selectedVisibleQuote += 1
 	} else if ui.selectedVisibleQuote+1 >= ui.stockWin.h {
 		ui.zerothQuote += 1
-		ui.visibleQuotes = (*ui.stockQuotes)[ui.zerothQuote : ui.zerothQuote+ui.stockWin.h]
+		ui.visibleQuotes = (*ui.stockQuotes)[ui.zerothQuote : ui.zerothQuote+
+			ui.stockWin.h]
 		ui.selectedQuote = updatedPos
 	}
 }
@@ -636,7 +649,8 @@ func (ui *Ui) navigateStockUp() {
 	} else if updatedPos < ui.zerothQuote && ui.zerothQuote > 0 {
 		ui.zerothQuote -= 1
 		ui.selectedQuote = updatedPos
-		ui.visibleQuotes = (*ui.stockQuotes)[ui.zerothQuote : ui.zerothQuote+ui.stockWin.h]
+		ui.visibleQuotes = (*ui.stockQuotes)[ui.zerothQuote : ui.zerothQuote+
+			ui.stockWin.h]
 	}
 }
 

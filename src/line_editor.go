@@ -171,7 +171,7 @@ func (editor *LineEditor) AddQuotes() (ticker string, err error) {
 
 func removeTicker(s []string, r string) []string {
 	for i, v := range s {
-		if v == r {
+		if strings.ToUpper(v) == strings.ToUpper(r) {
 			return append(s[:i], s[i+1:]...)
 		}
 	}

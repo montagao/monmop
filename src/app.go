@@ -33,6 +33,17 @@ var navBindingKeys = map[termbox.Key]rune{
 	termbox.KeyArrowRight: 'l',
 }
 
+var navKeys = map[rune]int{
+	'j': 6,
+	'k': 7,
+	'h': 0,
+	'l': 1,
+	'b': 2,
+	'e': 3,
+	'0': 4,
+	'$': 5,
+}
+
 type app struct {
 	ui       *Ui
 	ticker   *time.Ticker
@@ -79,7 +90,7 @@ func loadProfile(user *user.User) (*profile, error) {
 		// set some defaults
 		profile.Portfolios = map[string]portfolio{
 			"default": {
-				Tickers: []string{"GOOG", "AAPL", "AMZN", "MSFT"},
+				Tickers: []string{"GOOG", "AAPL", "AMZN", "MSFT", "SPLK"},
 			},
 		}
 		profile.Tickers = profile.Portfolios["default"].Tickers
@@ -87,7 +98,8 @@ func loadProfile(user *user.User) (*profile, error) {
 	} else {
 		json.Unmarshal(data, profile)
 	}
-	profile.Tickers = profile.Portfolios["default"].Tickers
+	profile.Tickers = make([]string, len(profile.Portfolios["default"].Tickers))
+	copy(profile.Tickers, profile.Portfolios["default"].Tickers)
 
 	return profile, nil
 }
@@ -163,6 +175,8 @@ func (app *app) loop() {
 	for {
 		select {
 		case <-app.quitChan:
+			// TODO: disable this until we can handle this better,
+			// i.e. with some kind of user prompt
 			app.saveProfile()
 			return // exit app
 		case event := <-app.keyQueue:
@@ -225,7 +239,7 @@ func (app *app) loop() {
 					}
 				case SORT:
 					if event.Ch == 'q' || event.Ch == 'Q' {
-						app.saveProfile()
+						// app.saveProfile()
 						return
 					} else if isLabelNavigationEvent(event) {
 						if ch, ok := navBindingKeys[event.Key]; ok {
@@ -248,10 +262,10 @@ func (app *app) loop() {
 	}
 }
 func isLabelNavigationEvent(e termbox.Event) bool {
-	if _, ok := navBindingKeys[e.Key]; ok {
+	if _, ok := navKeys[e.Ch]; ok {
 		return true
 	}
-	return e.Ch == 'h' || e.Ch == 'l' || e.Ch == 'b' || e.Ch == 'e' || e.Ch == '0' || e.Ch == '$' || e.Ch == 'j' || e.Ch == 'k'
+	return false
 }
 
 func (app *app) fetchAndDraw() {
