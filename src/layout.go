@@ -10,13 +10,6 @@ type Column struct {
 
 type Layout struct {
 	columns []Column
-
-	//TODO:
-	// sorter         *Sorter            // Pointer to sorting receiver.
-	// filter         *Filter            // Pointer to filtering receiver.
-	// regex          *regexp.Regexp     // Pointer to regular expression to align decimal points.
-	// marketTemplate *template.Template // Pointer to template to format market data.
-	// quotesTemplate *template.Template // Pointer to template to format the list of stock quotes.
 }
 
 func NewLayout() *Layout {

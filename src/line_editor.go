@@ -10,15 +10,17 @@ import (
 )
 
 type LineEditor struct {
-	cmd        rune           // keyboard command such as "d" or "a"
-	cursor     int            // cursor pos
-	quoteIndex int            // currently highlighted quote
-	prompt     string         // prompt string for a command
-	input      string         // user typed input stirng
-	quotes     *[]Quote       // pointer to quotes
-	profile    *profile       // pointer to profile
-	regex      *regexp.Regexp // regex to split comma-delimited input string
-	commandWin *Win
+	cmd         rune   // keyboard command such as "d" or "a"
+	cursor      int    // cursor pos
+	quoteIndex  int    // currently highlighted quote
+	prompt      string // prompt string for a command
+	input       string // user typed input string
+	promptError string
+	message     string
+	quotes      *[]Quote       // pointer to quotes
+	profile     *profile       // pointer to profile
+	regex       *regexp.Regexp // regex to split comma-delimited input string
+	commandWin  *Win
 }
 
 func NewLineEditor(profile *profile, quotes *[]Quote, commandWin *Win) *LineEditor {
@@ -30,7 +32,6 @@ func NewLineEditor(profile *profile, quotes *[]Quote, commandWin *Win) *LineEdit
 }
 
 func (editor *LineEditor) Prompt(cmd rune, quoteIndex int) {
-	fg, bg := termbox.ColorDefault, termbox.ColorDefault
 	prompts := map[rune]string{
 		'a': `add tickers: `,
 		'd': `delete selected ticker? y/n :`,
@@ -41,10 +42,25 @@ func (editor *LineEditor) Prompt(cmd rune, quoteIndex int) {
 	if prompt, ok := prompts[cmd]; ok {
 		editor.prompt = prompt
 		editor.cmd = cmd
+	}
+}
 
+func (editor *LineEditor) Draw() {
+	fg, bg := termbox.ColorDefault, termbox.ColorDefault
+	editor.commandWin.Clear()
+	if editor.promptError != "" {
+		fg, bg = termbox.ColorRed, termbox.ColorWhite
+		editor.commandWin.print(0, 0, fg, bg, editor.promptError)
+		editor.Done()
+		return
+	} else if editor.message != "" {
+		editor.commandWin.print(0, 0, fg, bg, editor.message)
+		editor.Done()
+		return
+	} else if editor.prompt != "" {
 		editor.commandWin.print(0, 0, fg, bg, editor.prompt)
-		termbox.SetCursor(len(editor.prompt), editor.commandWin.y)
-		termbox.Flush()
+		editor.commandWin.print(len(editor.prompt), 0, fg, bg, editor.input)
+		termbox.SetCursor(len(editor.prompt)+len(editor.input), editor.commandWin.y)
 	}
 }
 
@@ -68,16 +84,20 @@ func (editor *LineEditor) Handle(ev termbox.Event) {
 }
 
 func (editor *LineEditor) Done() {
-	defer termbox.Flush()
 	termbox.HideCursor()
-	editor.commandWin.Clear()
 	editor.prompt = ""
 	editor.input = ""
+	editor.message = ""
+	editor.promptError = ""
 	editor.cursor = 0
+
+	if editor.prompt != "" {
+		termbox.SetCursor(len(editor.prompt)+len(editor.input), editor.commandWin.y)
+	}
+
 }
 
 func (editor *LineEditor) Execute(selectedQuote int) (newQuote int) {
-	fg, bg := termbox.ColorDefault, termbox.ColorDefault
 	switch editor.cmd {
 	case 'd':
 		if strings.TrimSpace(strings.ToLower(editor.input)) == "y" {
@@ -85,22 +105,16 @@ func (editor *LineEditor) Execute(selectedQuote int) (newQuote int) {
 				if q := (*editor.quotes)[id]; id == selectedQuote {
 					// remove from list of tickers
 					editor.profile.Tickers = removeTicker(editor.profile.Tickers, q.Ticker)
-					// TODO: prevent adding duplicate tickers
 					return selectedQuote - 1
 				}
 			}
 		}
 	case '/':
 		// perform a search on a ticker
-		for id, q := range *editor.quotes {
-			if strings.TrimSpace(strings.ToUpper(editor.input)) == q.Ticker {
-				return id
-			}
-		}
-		return -1
-
+		return getTickerId(editor.profile.Tickers, strings.TrimSpace(strings.ToUpper(editor.input)))
 	case ':':
 		args := editor.tokenize(" ")
+		editor.input = ""
 		termbox.HideCursor()
 		termbox.Flush()
 		if args[0] == "save" {
@@ -108,63 +122,62 @@ func (editor *LineEditor) Execute(selectedQuote int) (newQuote int) {
 			editor.profile.Portfolios[portfolioName] = portfolio{
 				Tickers: append([]string{}, editor.profile.Tickers...),
 			}
-			editor.prompt = fmt.Sprintf("saved portfolio as '%s'", portfolioName)
-			editor.commandWin.print(0, 0, fg, bg, editor.prompt)
+			editor.message = fmt.Sprintf("saved portfolio as '%s'", portfolioName)
 		} else if args[0] == "load" {
 			portfolioName := args[1]
 			portfolio, ok := editor.profile.Portfolios[portfolioName]
 			if !ok {
-				editor.Printf("portfolio not found: %s", portfolioName)
+				editor.PrintErrorf("portfolio not found: %s", portfolioName)
 				return -1
 			} else {
 				editor.profile.Tickers = append([]string{}, portfolio.Tickers...)
 
-				editor.prompt = fmt.Sprintf("loaded portfolio '%s'", portfolioName)
-				editor.commandWin.print(0, 0, fg, bg, editor.prompt)
+				editor.message = fmt.Sprintf("loaded portfolio '%s'", portfolioName)
 			}
 		} else if args[0] == "new" {
 			editor.profile.Tickers = []string{}
-			editor.prompt = fmt.Sprintf("creating new portfolio")
-			editor.commandWin.print(0, 0, fg, bg, editor.prompt)
+			editor.message = fmt.Sprintf("creating new portfolio")
 		} else if args[0] == "list" {
-			editor.prompt = fmt.Sprintf("saved portfolios: '%s'", reflect.ValueOf(editor.profile.Portfolios).MapKeys())
-			editor.commandWin.print(0, 0, fg, bg, editor.prompt)
+			editor.message = fmt.Sprintf("saved portfolios: '%s'", reflect.ValueOf(editor.profile.Portfolios).MapKeys())
 		} else {
-			editor.prompt = fmt.Sprintf("could not recognize command '%s'", args[0])
-			editor.commandWin.print(0, 0, fg, bg, editor.prompt)
+			editor.PrintErrorf("could not recognize command '%s'", args[0])
 		}
 		return 0
 	}
 	return 0
 }
 
-func (editor *LineEditor) Printf(format string, a ...interface{}) {
-	fg, bg := termbox.ColorDefault, termbox.ColorDefault
-	editor.prompt = fmt.Sprintf(format, a...)
-	editor.commandWin.print(0, 0, fg, bg, editor.prompt)
+func (editor *LineEditor) PrintErrorf(format string, a ...interface{}) {
+	editor.promptError = fmt.Sprintf(format, a...)
 }
 
-func (editor *LineEditor) AddQuotes() (ticker string) {
+func (editor *LineEditor) AddQuotes() (ticker string, err error) {
+	// input for tickers should match "GOOG" or "GOOG, AAPL" ignoring whitespace inbetween
+	validFmt := regexp.MustCompile(`^\s*([a-zA-Z-]+)(,\s*[a-zA-Z-]+\s*)*$`)
+	if !validFmt.MatchString(editor.input) {
+		return editor.input, fmt.Errorf("parse error")
+	}
 	tickers := editor.tokenize(",")
-	if len(tickers) > 0 {
-		// TODO: do some basic validation checks on tickers
-		editor.profile.Tickers = append(editor.profile.Tickers, tickers...)
+	for _, ticker := range tickers {
+		// ignore duplicate tickers
+		if getTickerId(editor.profile.Tickers, ticker) == -1 {
+			editor.profile.Tickers = append(editor.profile.Tickers, ticker)
+		}
 	}
 
 	// return the last ticker added so we can select it
-	return tickers[len(tickers)-1]
+	return tickers[len(tickers)-1], nil
 }
 
 func removeTicker(s []string, r string) []string {
 	for i, v := range s {
-		if v == r {
+		if strings.ToUpper(v) == strings.ToUpper(r) {
 			return append(s[:i], s[i+1:]...)
 		}
 	}
 	return s
 }
 func (editor *LineEditor) insertCharacter(ch rune) {
-	fg, bg := termbox.ColorDefault, termbox.ColorDefault
 	if editor.cursor < len(editor.input) {
 		// Insert the character in the middle of the input string.
 		editor.input = editor.input[0:editor.cursor] + string(ch) + editor.input[editor.cursor:len(editor.input)]
@@ -172,14 +185,10 @@ func (editor *LineEditor) insertCharacter(ch rune) {
 		// Append the character to the end of the input string.
 		editor.input += string(ch)
 	}
-	// TODO: make a heplper function for printing
-	editor.commandWin.print(len(editor.prompt), 0, fg, bg, editor.input)
 	editor.moveRight()
-
 }
 
 func (editor *LineEditor) deletePrevChar() {
-	fg, bg := termbox.ColorDefault, termbox.ColorDefault
 	if editor.cursor > 0 {
 		if editor.cursor < len(editor.input) {
 			// remove character in the middle
@@ -188,7 +197,6 @@ func (editor *LineEditor) deletePrevChar() {
 			// remove last input characters
 			editor.input = editor.input[:len(editor.input)-1]
 		}
-		editor.commandWin.print(len(editor.prompt), 0, fg, bg, editor.input+` `)
 		editor.moveLeft()
 	}
 }
@@ -196,14 +204,12 @@ func (editor *LineEditor) deletePrevChar() {
 func (editor *LineEditor) moveRight() {
 	if editor.cursor < len(editor.input) {
 		editor.cursor++
-		termbox.SetCursor(len(editor.prompt)+editor.cursor, editor.commandWin.y)
 	}
 }
 
 func (editor *LineEditor) moveLeft() {
 	if editor.cursor > 0 {
 		editor.cursor--
-		termbox.SetCursor(len(editor.prompt)+editor.cursor, editor.commandWin.y)
 	}
 }
 
