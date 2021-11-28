@@ -1,6 +1,6 @@
 ## monmop
 
-monmop is my own fork of [mop](https://github.com/mop-tracker/mop), which is a command line utility for tracking the stock market.
+monmop is inspired by [mop](https://github.com/mop-tracker/mop), which is a command line utility for tracking the stock market.
 
 ![Screenshot](https://raw.githubusercontent.com/montagao/monmop/master/docs/screenshot.png "monmop")
 
