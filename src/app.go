@@ -13,8 +13,8 @@ import (
 	"github.com/nsf/termbox-go"
 )
 
-// TODO: make this more system-wide compatible
 const defaultProfile = ".config/monmop/"
+const DEFAULT_DEBOUNCE_DURATION = 100 * time.Millisecond
 
 type mode int
 
@@ -24,6 +24,7 @@ const (
 	NORMAL mode = iota
 	COMMAND
 	SORT
+	CONFIRM_QUIT // new mode for quit confirmation
 )
 
 var navBindingKeys = map[termbox.Key]rune{
@@ -51,6 +52,10 @@ type app struct {
 	keyQueue chan termbox.Event
 	profile  *profile
 	mode     *mode
+
+	// debounce keypresses
+	allowOpenInBrowser bool
+	debounceDuration   time.Duration
 }
 
 type portfolio struct {
@@ -68,13 +73,10 @@ func (profile *profile) Save() error {
 	if err != nil {
 		return err
 	}
-	// log.Printf("saving to %s", profile.filepath)
-
 	return ioutil.WriteFile(profile.filepath, data, 0644)
 }
 
 func loadProfile(user *user.User) (*profile, error) {
-	// TODO: allow custom profile path?
 	profile := &profile{}
 
 	profilePath := path.Join(user.HomeDir, defaultProfile)
@@ -108,7 +110,6 @@ func (app *app) saveProfile() error {
 	b, err := json.Marshal(app.profile)
 	if err != nil {
 		panic(err)
-		return err
 	}
 
 	err = ioutil.WriteFile(app.profile.filepath, b, 0644)
@@ -158,12 +159,14 @@ func newApp() *app {
 	}()
 
 	return &app{
-		ui:       ui,
-		quitChan: quitChan,
-		ticker:   time.NewTicker(60 * time.Second),
-		keyQueue: keyQueue,
-		profile:  profile,
-		mode:     &mode,
+		ui:                 ui,
+		quitChan:           quitChan,
+		ticker:             time.NewTicker(60 * time.Second),
+		keyQueue:           keyQueue,
+		profile:            profile,
+		mode:               &mode,
+		allowOpenInBrowser: true,
+		debounceDuration:   DEFAULT_DEBOUNCE_DURATION,
 	}
 
 }
@@ -235,7 +238,16 @@ func (app *app) loop() {
 						app.ui.Prompt(event.Ch)
 						*app.mode = COMMAND
 					} else if event.Ch == 'o' || event.Key == termbox.KeyEnter {
-						app.ui.OpenInBrowser()
+						// Check if OpenInBrowser action is allowed
+						if app.allowOpenInBrowser {
+							app.ui.OpenInBrowser()
+
+							// Debounce the action
+							app.allowOpenInBrowser = false
+							time.AfterFunc(app.debounceDuration, func() {
+								app.allowOpenInBrowser = true
+							})
+						}
 					}
 				case SORT:
 					if event.Ch == 'q' || event.Ch == 'Q' {

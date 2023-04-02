@@ -591,6 +591,7 @@ func (ui *Ui) GetQuotes() {
 		ui.lineEditor.PrintErrorf("couldn't fetch quotes:  %v", err)
 		return
 	}
+
 	if len(*ui.stockQuotes) > ui.maxQuotesHeight {
 		ui.stockWin.h = ui.maxQuotesHeight
 	} else {
@@ -606,6 +607,18 @@ func (ui *Ui) GetQuotes() {
 	} else if ui.sortSymbol == ASCENDING_CHAR {
 		ui.HandleSortEvent('k')
 	}
+}
+
+func (ui *Ui) updateVisibleQuotes() {
+	start := ui.zerothQuote
+	end := start + ui.stockWin.h
+	if end > len(*ui.stockQuotes) {
+		end = len(*ui.stockQuotes)
+	}
+
+	// Create a new slice and copy the relevant elements into it.
+	ui.visibleQuotes = make([]Quote, end-start)
+	copy(ui.visibleQuotes, (*ui.stockQuotes)[start:end])
 }
 
 func (ui *Ui) navigateStockBeginning() {
@@ -631,9 +644,8 @@ func (ui *Ui) navigateStockDown() {
 		ui.selectedVisibleQuote += 1
 	} else if ui.selectedVisibleQuote+1 >= ui.stockWin.h {
 		ui.zerothQuote += 1
-		ui.visibleQuotes = (*ui.stockQuotes)[ui.zerothQuote : ui.zerothQuote+
-			ui.stockWin.h]
 		ui.selectedQuote = updatedPos
+		ui.updateVisibleQuotes() // Update the visibleQuotes slice.
 	}
 }
 
@@ -649,8 +661,7 @@ func (ui *Ui) navigateStockUp() {
 	} else if updatedPos < ui.zerothQuote && ui.zerothQuote > 0 {
 		ui.zerothQuote -= 1
 		ui.selectedQuote = updatedPos
-		ui.visibleQuotes = (*ui.stockQuotes)[ui.zerothQuote : ui.zerothQuote+
-			ui.stockWin.h]
+		ui.updateVisibleQuotes() // Update the visibleQuotes slice.
 	}
 }
 
